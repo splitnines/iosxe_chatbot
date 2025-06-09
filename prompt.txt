@@ -1,6 +1,6 @@
-Generate the configuration to add IP address 192.168.1.1/24 to interface
-GigabitEthernet3. Enable the interface and add the interface to the OSPF
-process 1. Use the configuration file as reference.
+Generate the configuration to add IP address 192.168.100.1/24 to interface
+GigabitEthernet3, add the interface to the existing OSPF process in area 1
+and enable the interface. Use the configuration file as reference.
 
 Respond with only the code, no notes and do not wrap the response in markdown
 code block quotes.

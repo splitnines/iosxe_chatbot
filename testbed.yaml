@@ -1,0 +1,33 @@
+---
+testbed:
+    name: 'CML LAB'
+    credentials:
+        default:
+            username: 'cisco'
+            password: 'cisco'
+
+    servers:
+        zeus:
+            dynamic: true
+            # protocol: scp
+            address: 10.0.0.84
+            port: 2222
+            # path: '/pyats/'
+            credentials:
+                default:
+                    username: "root"
+                    password: "cisco"
+
+devices:
+    sr1-1:
+        alias: 'Site 1 Router 1'
+        type: 'router'
+        os: 'iosxe'
+        platform: 'C8000V'
+        connections:
+            cli:
+                protocol: ssh
+                ip: 10.1.1.1
+                port: 22
+                arguments:
+                    connection_timeout: 360

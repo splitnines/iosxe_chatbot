@@ -1,0 +1,9 @@
+You are a senior network engineer tasked with changing the OSPF configuration
+of a Cisco IOS-XE router.  Generate the configuation to enable OSPF process 999
+globally, migrate all interfaces currently in OSPF process 1 to OSPF process
+999 and remove OSPF process 1 from the global config.  Use the attached
+configuration file as a reference for the current running configuration.
+
+Respond with only the code, no notes and do not wrap the response in markdown
+code block quotes.
+
