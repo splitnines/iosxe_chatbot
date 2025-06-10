@@ -1,8 +1,10 @@
 import datetime as dt
 import difflib
 import logging
-import openai
+
+# import openai
 import os
+from openai import OpenAI, OpenAIError
 from pyats import aetest
 from pyats.log.utils import banner
 # from genie.utils.diff import Diff
@@ -34,91 +36,50 @@ class ChatGPTConfigOps(aetest.Testcase):
         self.device = testbed.devices[device_name]
 
     @aetest.test
+    def capture_show_run(self):
+        self.pre_change = self.device.execute("show running-config brief")
+
+    @aetest.test
     def prompt_gpt(self):
         try:
-            openai.api_key = os.getenv("OPENAI_API_KEY")
-            if not openai.api_key:
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            if not client:
                 self.failed(
-                    "Missing OPENAI_API_KEY enviroment variable.",
+                    "Failed to initialize OpenAI client.",
                     goto=["common_cleanup"],
                 )
-
             try:
                 with open("prompt.txt", "r") as f:
                     self.prompt = f.read()
-
             except OSError as e:
                 self.failed(
                     f"Failed to read prompt.txt: {e}", goto=["common_cleanup"]
                 )
 
+            self.input = self.prompt + "\n\n" + self.pre_change
+
+            try:
+                self.gpt_config = client.responses.create(
+                    model="gpt-4o", input=self.input
+                )
+            except OpenAIError as e:
+                self.failed(f"Failed to get a response from openai: {e}")
+
             log.info(f"ChatGPT prompt:\n\n{self.prompt}")
             log.info("")
 
-            uploaded_file = None
-            try:
-                uploaded_file = openai.files.create(
-                    file=open("sr1-1_running-config.pdf", "rb"),
-                    purpose="assistants",
-                )
-                try:
-                    response = openai.chat.completions.create(
-                        model="gpt-4o",
-                        messages=[
-                            {
-                                "role": "user",
-                                "content": [
-                                    {
-                                        "type": "text",
-                                        "text": self.prompt,
-                                    },
-                                    {
-                                        "type": "file",
-                                        "file": {"file_id": uploaded_file.id},
-                                    },
-                                ],
-                            }
-                        ],
-                    )
-
-                    self.gpt_config = response.choices[0].message.content
-                except openai.OpenAIError as e:
-                    self.failed(
-                        f"OpenAI API request failed: {e}",
-                        goto=["common_cleanup"],
-                    )
-            except OSError as e:
-                self.failed(
-                    f"Failed to open PDF file: {e}", goto=["common_cleanup"]
-                )
-            except openai.OpenAIError as e:
-                self.failed(
-                    f"Failed to upload file to OpenAI: {e}",
-                    goto=["common_cleanup"],
-                )
-
-            if not uploaded_file or not hasattr(uploaded_file, "id"):
-                self.failed(
-                    "File upload failed; uploaded_file is None",
-                    goto=["common_cleanup"],
-                )
-
-            log.info(f"ChatGPT config:\n\n{self.gpt_config}")
+            log.info(f"ChatGPT config:\n\n{self.gpt_config.output_text}")
             log.info("")
         except Exception as e:
             self.failed(f"Unhandled exception: {e}", goto=["common_cleanup"])
 
     @aetest.test
-    def capture_show_run(self):
-        self.pre_change = self.device.execute("show running-config")
-
-    @aetest.test
     def config_change(self):
-        self.device.configure(self.gpt_config)
+        self.device.configure(self.gpt_config.output_text)
 
     @aetest.test
     def recapture_show_run(self):
-        self.post_change = self.device.execute("show running-config")
+        self.post_change = self.device.execute("show running-config brief")
 
     @aetest.test
     def show_run_diff(self):

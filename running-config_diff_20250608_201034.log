@@ -1,8 +1,0 @@
-- Current configuration : 8060 bytes
-+ Current configuration : 8080 bytes
-- ! Last configuration change at 03:10:24 UTC Mon Jun 9 2025 by cisco
-+ ! Last configuration change at 03:10:29 UTC Mon Jun 9 2025 by cisco
--  ip ospf 1 area 1
-+  ip ospf 999 area 1
-+ !
-+ router ospf 999
