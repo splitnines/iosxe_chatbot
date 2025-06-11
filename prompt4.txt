@@ -1,0 +1,5 @@
+Acting as a senior network engineer, using the attached file, tell me which
+routing protocols are being used on the router and which interface are included
+in in the routing process.
+
+Do not wrap and code in markdown quotes, just display it as text.

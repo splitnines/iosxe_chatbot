@@ -5,31 +5,29 @@ import os
 def prompt_gpt(prompt):
     openai.api_key = os.getenv("OPENAI_API_KEY")
 
-    # uploaded_file = openai.files.create(
-    #     file=open("sr1-1_running-config.pdf", "rb"),
-    #     purpose="assistants",
-    # )
-    with open("sr1-1_running-config.txt", "r") as f:
-        conf = f.read()
+    file = openai.files.create(
+        file=open("sr1-1_running-config.pdf", "rb"),
+        purpose="user_data",
+    )
 
-    input = prompt + "\n\n" + conf
-
-    response = openai.responses.create(model="gpt-4o", input=input)
-    # response = openai.chat.completions.create(
-    #     model="gpt-4o",
-    #     messages=[
-    #         {
-    #             "role": "user",
-    #             "content": [
-    #                 {
-    #                     "type": "text",
-    #                     "text": prompt,
-    #                 },
-    #                 {"type": "file", "file": {"file_id": uploaded_file.id}},
-    #             ],
-    #         }
-    #     ],
-    # )
+    response = openai.responses.create(
+        model="gpt-4o",
+        input=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_file",
+                        "file_id": file.id,
+                    },
+                    {
+                        "type": "input_text",
+                        "text": prompt,
+                    },
+                ],
+            }
+        ],
+    )
 
     return response
 
@@ -41,11 +39,9 @@ def get_prompt(filename):
 
 
 def main():
-    response = prompt_gpt(get_prompt("prompt.txt"))
+    response = prompt_gpt(get_prompt("prompt4.txt"))
 
-    print(f"{response}\n\n")
     print(response.output_text)
-    # print(response.choices[0].message.content)
 
 
 if __name__ == "__main__":

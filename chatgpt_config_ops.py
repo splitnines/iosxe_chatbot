@@ -1,13 +1,11 @@
 import datetime as dt
 import difflib
 import logging
-
-# import openai
 import os
+
 from openai import OpenAI, OpenAIError
 from pyats import aetest
 from pyats.log.utils import banner
-# from genie.utils.diff import Diff
 
 
 log = logging.getLogger(__name__)
