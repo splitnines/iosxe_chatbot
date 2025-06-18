@@ -18,7 +18,7 @@ def connect_tb(tb_file):
     log.info(f'Loading testbed file "{tb_file}".')
     tb = load(tb_file)
     log.info("Connecting to testbed.")
-    tb.connect(log_stdout=False)
+    tb.connect(log_stdout=False, logfile=False)
     log.info("Successfully connected to testbed")
 
     return tb
@@ -30,6 +30,7 @@ def run_command(tb, dev, command):
     return resp
 
 
+# TODO:
 def configure(tb):
     pass
 
@@ -58,12 +59,20 @@ def get_prompt(filename):
 
 
 def interact(tb):
-    prompt = get_prompt("cisco_iosxe_prompt.txt")
+    prompt = get_prompt("cisco_iosxe_prompt.md")
     print("\nPress Ctrl-c to exit.\n")
+    print('Enter "/new" for a new context window.\n\n')
     user_input = [{"role": "developer", "content": prompt}]
     while True:
         try:
-            input_query = input("\n\n\tPrompt: ")
+            input_query = input("Prompt: ")
+
+            # Create a new context window
+            if input_query == "/new":
+                log.info("Starting new context window.")
+                user_input = [{"role": "developer", "content": prompt}]
+                input_query = input("Prompt: ")
+
             user_input.append({"role": "user", "content": input_query})
 
             response = prompt_gpt(user_input)
@@ -74,30 +83,40 @@ def interact(tb):
 
             reply = json.loads(response.output_text)
             if "answer" in reply.keys():
+                print(f"\n{reply['answer']}\n")
                 continue
 
-            command_resp = run_command(tb, "sr1-1", reply["command"])
-            user_input.append(
-                {
-                    "role": "user",
-                    "content": str(command_resp),
-                }
-            )
+            if "command" in reply.keys():
+                command_resp = run_command(tb, "sr1-1", reply["command"])
+                user_input.append(
+                    {
+                        "role": "user",
+                        "content": str(command_resp),
+                    }
+                )
+            else:
+                log.error(
+                    f"Reply did not contain a command: {reply['command']}"
+                )
+                continue
 
             response2 = prompt_gpt(user_input)
             reply2 = json.loads(response2.output_text)
             log.info(f"Reply from the LLM API: {reply2}")
 
-            print(f"\n\t{reply2['answer']}\n")
+            if "answer" in reply2.keys():
+                print(f"\n{reply2['answer']}\n")
+            else:
+                log.info(f"Reply did not contain an answer {reply2}")
         except KeyboardInterrupt:
             print()
             return
         except OpenAIError as e:
             log.exception(f"Caught OpenAIError: {e}.")
-            return
+        except json.JSONDecodeError as e:
+            log.exception(f"Caught JSONDecodeError: {e}")
         except Exception as e:
             log.exception(f"Caught exception: {e}")
-            return
 
 
 def main():
