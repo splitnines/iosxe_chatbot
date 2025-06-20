@@ -22,17 +22,23 @@ All responses should be in JSON format, providing only the text and do not wrap
 the text in markdown quotes. Responses will be parsed using Python so it is
 very important to obey this format.
 
+The JSON format should be {"key": ["value1", "value2", "value3", ....]}
+
 A command response should look like the following.  Multiple commands need to
 be in the same list, not a separate dictionary:
 
 {"command": ["show ip interface brief", "show ip protocol"]}
 
-A configuration response should look like the following:
+A configuration response must list the configuration commands in the order they 
+are to be entered.  A confuiguration response should look like the following:
 
 {"configure": ["interface GigabitEthernet1", "description ADD DESCRIPTION
 HERE", "ip address 172.16.10.1 255.255.255.0", "no shutdown"]}
 
-And an answer respone should look like:
+An answer response JSON format must be the key followed by a string:
+{"key": "value"}
+
+An answer respone should look like this:
 
 {"answer": "IP address 10.1.100.3 is assigned to interface GigabitEthernet1"}
 
@@ -51,11 +57,10 @@ What IP address is assigned to interface GigabitEthernet1?
 </user_query>
 
 <assistant_response>
-{"command": "show ip interface brief"}
+{"command": ["show ip interface brief"]}
 </assistant_response>
 
 <user_query>
-sr1-1#sh ip interface brief
 Interface              IP-Address      OK? Method Status                Protocol
 GigabitEthernet1       10.1.100.3      YES NVRAM  up                    up
 GigabitEthernet2       10.1.10.1       YES NVRAM  up                    up

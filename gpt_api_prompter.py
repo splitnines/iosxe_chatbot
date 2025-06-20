@@ -2,9 +2,8 @@ import json
 import logging
 import os
 import sys
-import tiktoken
 from genie.testbed import load
-from unicon.core.errors import ConnectionError
+from unicon.core.errors import ConnectionError, SubCommandFailure
 from openai import OpenAI, OpenAIError
 
 
@@ -37,16 +36,21 @@ def connect_tb(tb_file):
 
 def run_command(tb, dev, command):
     resp = tb.devices[dev].execute(command)
-
     return resp
 
 
-# TODO: add code the to perform configuration tasks
-def configure():
-    pass
+def configure(tb, dev, conf_list):
+    try:
+        tb.devices[dev].configure(conf_list)
+        log.info(f"Device {dev} configured successully.")
+    except SubCommandFailure as e:
+        log.error(f"Device {dev} configuration failed: {e}")
+    except Exception as e:
+        log.error(f"Caught generic exception: {e}")
 
 
 def disconnect_tb(tb):
+    print()
     log.info("Disconnecting from testbed, please wait.")
     tb.disconnect()
     log.info("Successfully disconnected from testbed.")
@@ -59,7 +63,6 @@ def prompt_gpt(user_input):
             model="gpt-4o",
             input=user_input,
         )
-
         return response
 
     except OpenAIError as e:
@@ -74,20 +77,10 @@ def get_prompt(filename):
     return prompt
 
 
-# TODO: Implement a prompt parser
-def prompt_parser():
-    pass
-
-
-def token_sum(lst):
-    enc = tiktoken.encoding_for_model("gpt-4o")
-    tokens = enc.encode(lst)
-    return len(tokens)
-
-
 def menu():
     print("\nPress Ctrl-c to exit.\n")
     print('Enter "/new" for a new context window.')
+    print('Enter "/menu" to print this menu.')
     print('Enter "/prompt" to print the developer prompt.\n\n')
 
 
@@ -95,26 +88,24 @@ def menu():
 # {"type": "response"}
 # There are 3 types: command, answer and configure
 def iosxe_chat_loop(tb, prompt_file):
-    count = 0
+    context_depth = 0
     prompt = get_prompt(prompt_file)
 
     menu()
 
     user_input = [{"role": "developer", "content": prompt}]
-    token_est = [prompt]
     while True:
         try:
-            input_query = input(f"[{count}]Prompt: ")
+            input_query = input(f"[{context_depth}]Prompt: ")
             print()
 
             # Create a new context window
             if input_query == "/new":
-                log.info("Starting new context window.")
+                log.info("Starting new context window.\n")
                 user_input = [{"role": "developer", "content": prompt}]
-                token_est = [prompt]
 
-                count = 0
-                input_query = input(f"[{count}]Prompt: ")
+                context_depth = 0
+                continue
 
             # Print the developer prompt to the screen
             if input_query == "/prompt":
@@ -130,14 +121,17 @@ def iosxe_chat_loop(tb, prompt_file):
                 continue
 
             user_input.append({"role": "user", "content": input_query})
-            token_est.append(input_query)
+
+            context_depth += 1
 
             response = prompt_gpt(user_input)
-            count += 1
             if response is not None:
-                log.info(f"Reply from the LLM API: {response.output_text}")
+                if response.usage is not None:
+                    log.info(
+                        f"Total Tokens: {response.usage.total_tokens}"
+                    )
 
-                token_est.append(response.output_text)
+                log.info(f"Reply from the LLM API: {response.output_text}")
 
                 reply = json.loads(response.output_text)
 
@@ -160,34 +154,34 @@ def iosxe_chat_loop(tb, prompt_file):
                             "content": str(command_resp),
                         }
                     )
-                    token_est.append(command_resp)
 
-                else:
-                    log.error(
-                        f"Reply did not contain a command: {reply['command']}"
-                    )
-                    continue
+                    response = prompt_gpt(user_input)
+                    if response is not None:
+                        if response.usage is not None:
+                            log.info(
+                                f"Total Tokens: {response.usage.total_tokens}"
+                            )
 
-            log.info(
-                "Estimated Tokens: "
-                f"{int(token_sum(''.join(token_est)) / 0.9565)}"
-            )
-            response = prompt_gpt(user_input)
-            if response is not None:
-                reply = json.loads(response.output_text)
-                log.info(f"Reply2 from the LLM API: {reply}")
+                        reply = json.loads(response.output_text)
 
-                if "answer" in reply.keys():
-                    print(f"\n{reply['answer']}\n")
+                        log.info("Reply from the LLM API: {reply}")
+                        if "answer" in reply.keys():
+                            print(f"\n{reply['answer']}\n")
 
-                    user_input.append(
-                        {"role": "assistant", "content": response.output_text}
-                    )
-                    token_est.append(response.output_text)
-                else:
-                    log.info(f"Reply2 did not contain an answer {reply}")
+                            user_input.append(
+                                {
+                                    "role": "assistant",
+                                    "content": response.output_text,
+                                }
+                            )
+                        else:
+                            log.error(
+                                f"Reply did not contain an answer {reply}"
+                            )
+                elif "configure" in reply.keys():
+                    configure(tb, "sr1-1", reply['configure'])
+
         except KeyboardInterrupt:
-            print()
             return
         except OpenAIError as e:
             log.error(f"Caught OpenAIError: {e}.")
