@@ -41,8 +41,9 @@ def handle_command(tb, dev, command):
 
 def handle_configure(tb, dev, conf_list):
     try:
-        tb.devices[dev].configure(conf_list)
+        resp = tb.devices[dev].configure(conf_list)
         log.info(f"Device {dev} configured successully.")
+        return resp
     except SubCommandFailure as e:
         log.error(f"Device {dev} configuration failed: {e}")
     except Exception as e:
@@ -50,7 +51,6 @@ def handle_configure(tb, dev, conf_list):
 
 
 def handle_disconnect(tb):
-    print()
     log.info("Disconnecting from testbed, please wait.")
     tb.disconnect()
     log.info("Successfully disconnected from testbed.")
@@ -84,11 +84,17 @@ def menu():
     print('Enter "/prompt" to print the developer prompt.\n\n')
 
 
+def log_total_tokens(total_tokens):
+    print()
+    log.info(f"Total toekns consumed for the session {total_tokens}")
+
+
 # LLM responses are in JSON format. Example:
 # {"type": "response"}
 # There are 3 types: command, answer and configure
 def handle_iosxe_chat(tb, prompt_file):
     context_depth = 0
+    total_tokens = 0
     prompt = developer_input_prompt(prompt_file)
 
     menu()
@@ -127,6 +133,7 @@ def handle_iosxe_chat(tb, prompt_file):
             if response is not None:
                 if response.usage is not None:
                     log.info(f"Total Tokens: {response.usage.total_tokens}")
+                    total_tokens += response.usage.total_tokens
 
                 log.info(f"Reply from the LLM API: {response.output_text}")
 
@@ -160,6 +167,7 @@ def handle_iosxe_chat(tb, prompt_file):
                             log.info(
                                 f"Total Tokens: {response.usage.total_tokens}"
                             )
+                            total_tokens += response.usage.total_tokens
 
                         reply = json.loads(response.output_text)
 
@@ -178,10 +186,13 @@ def handle_iosxe_chat(tb, prompt_file):
                                 f"Reply did not contain an answer {reply}"
                             )
                 elif "configure" in reply.keys():
-                    handle_configure(tb, "sr1-1", reply["configure"])
+                    conf_resp = handle_configure(
+                        tb, "sr1-1", reply["configure"]
+                    )
+                    print(f"\n!\n{conf_resp}!\n")
 
         except KeyboardInterrupt:
-            return
+            return total_tokens
         except OpenAIError as e:
             log.error(f"Caught OpenAIError: {e}.")
         except (json.JSONDecodeError, json.decoder.JSONDecodeError) as e:
@@ -202,7 +213,8 @@ def main():
         sys.exit(1)
 
     tb = handle_connect(tb_file)
-    handle_iosxe_chat(tb, prompt_file)
+    total_tokens = handle_iosxe_chat(tb, prompt_file)
+    log_total_tokens(total_tokens)
     handle_disconnect(tb)
 
 
