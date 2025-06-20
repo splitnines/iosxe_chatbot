@@ -63,12 +63,24 @@ def handle_llm_prompt(user_input):
             model="gpt-4o",
             input=user_input,
         )
-        return response
+        if response is not None:
+            total_tokens = 0
+            if response.usage is not None:
+                log.info(f"Total Tokens: {response.usage.total_tokens}")
+                total_tokens += response.usage.total_tokens
+
+            log.info(f"Reply from the LLM API: {response.output_text}")
+
+            reply = json.loads(response.output_text)
+
+            return reply, total_tokens
 
     except OpenAIError as e:
         log.error(f"Caught OpenAIError: {e}")
     except Exception as e:
         log.error(f"Caught exception: {e}")
+
+    return {}, 0
 
 
 def developer_input_prompt(filename):
@@ -94,7 +106,7 @@ def log_total_tokens(total_tokens):
 # There are 3 types: command, answer and configure
 def handle_iosxe_chat(tb, prompt_file):
     context_depth = 0
-    total_tokens = 0
+    token_count = 0
     prompt = developer_input_prompt(prompt_file)
 
     menu()
@@ -129,70 +141,49 @@ def handle_iosxe_chat(tb, prompt_file):
 
             context_depth += 1
 
-            response = handle_llm_prompt(user_input)
-            if response is not None:
-                if response.usage is not None:
-                    log.info(f"Total Tokens: {response.usage.total_tokens}")
-                    total_tokens += response.usage.total_tokens
+            reply, total_tokens = handle_llm_prompt(user_input)
+            if reply == {}:
+                log.error("Received an empty dict from handle_llm_prompt().")
+                return token_count
 
-                log.info(f"Reply from the LLM API: {response.output_text}")
+            token_count += total_tokens
+            if "answer" in reply.keys():
+                user_input.append({"role": "assistant", "content": str(reply)})
+                print(f"\n{reply['answer']}\n")
+                continue
 
-                reply = json.loads(response.output_text)
+            elif "command" in reply.keys():
+                user_input.append({"role": "assistant", "content": str(reply)})
+                command_resp = handle_command(tb, "sr1-1", reply["command"])
 
-                if "answer" in reply.keys():
-                    user_input.append(
-                        {"role": "assistant", "content": response.output_text}
-                    )
-                    print(f"\n{reply['answer']}\n")
-                    continue
+                user_input.append(
+                    {
+                        "role": "user",
+                        "content": str(command_resp),
+                    }
+                )
 
-                elif "command" in reply.keys():
-                    user_input.append(
-                        {"role": "assistant", "content": response.output_text}
-                    )
-                    command_resp = handle_command(
-                        tb, "sr1-1", reply["command"]
-                    )
+            reply, total_tokens = handle_llm_prompt(user_input)
+            if reply == {}:
+                log.error("Received an empty dict from handle_llm_prompt().")
+                return token_count
 
-                    user_input.append(
-                        {
-                            "role": "user",
-                            "content": str(command_resp),
-                        }
-                    )
+            token_count += total_tokens
+            if "answer" in reply.keys():
+                print(f"\n{reply['answer']}\n")
 
-                    response = handle_llm_prompt(user_input)
-                    if response is not None:
-                        if response.usage is not None:
-                            log.info(
-                                f"Total Tokens: {response.usage.total_tokens}"
-                            )
-                            total_tokens += response.usage.total_tokens
-
-                        reply = json.loads(response.output_text)
-
-                        log.info(f"Reply from the LLM API: {reply}")
-                        if "answer" in reply.keys():
-                            print(f"\n{reply['answer']}\n")
-
-                            user_input.append(
-                                {
-                                    "role": "assistant",
-                                    "content": response.output_text,
-                                }
-                            )
-                        else:
-                            log.error(
-                                f"Reply did not contain an answer {reply}"
-                            )
-                elif "configure" in reply.keys():
-                    conf_resp = handle_configure(
-                        tb, "sr1-1", reply["configure"]
-                    )
-                    print(f"\n!\n{conf_resp}!\n")
+                user_input.append(
+                    {
+                        "role": "assistant",
+                        "content": str(reply),
+                    }
+                )
+            elif "configure" in reply.keys():
+                conf_resp = handle_configure(tb, "sr1-1", reply["configure"])
+                print(f"\n!\n{conf_resp}!\n")
 
         except KeyboardInterrupt:
-            return total_tokens
+            return token_count
         except OpenAIError as e:
             log.error(f"Caught OpenAIError: {e}.")
         except (json.JSONDecodeError, json.decoder.JSONDecodeError) as e:
