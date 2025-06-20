@@ -100,25 +100,20 @@ def iosxe_chat_loop(tb, prompt_file):
             print()
 
             # Create a new context window
-            if input_query == "/new":
-                log.info("Starting new context window.\n")
-                user_input = [{"role": "developer", "content": prompt}]
-
-                context_depth = 0
-                continue
-
-            # Print the developer prompt to the screen
-            if input_query == "/prompt":
-                print(prompt)
-                continue
-
-            if input_query == "/menu":
-                menu()
-                continue
-
-            # Don't send empty prompts
-            if input_query == "":
-                continue
+            match input_query:
+                case "/new":
+                    log.info("Starting new context window.\n")
+                    user_input = [{"role": "developer", "content": prompt}]
+                    context_depth = 0
+                    continue
+                case "/prompt":
+                    print(prompt)
+                    continue
+                case "/menu":
+                    menu()
+                    continue
+                case "":
+                    continue
 
             user_input.append({"role": "user", "content": input_query})
 
@@ -127,9 +122,7 @@ def iosxe_chat_loop(tb, prompt_file):
             response = prompt_gpt(user_input)
             if response is not None:
                 if response.usage is not None:
-                    log.info(
-                        f"Total Tokens: {response.usage.total_tokens}"
-                    )
+                    log.info(f"Total Tokens: {response.usage.total_tokens}")
 
                 log.info(f"Reply from the LLM API: {response.output_text}")
 
@@ -164,7 +157,7 @@ def iosxe_chat_loop(tb, prompt_file):
 
                         reply = json.loads(response.output_text)
 
-                        log.info("Reply from the LLM API: {reply}")
+                        log.info(f"Reply from the LLM API: {reply}")
                         if "answer" in reply.keys():
                             print(f"\n{reply['answer']}\n")
 
@@ -179,7 +172,7 @@ def iosxe_chat_loop(tb, prompt_file):
                                 f"Reply did not contain an answer {reply}"
                             )
                 elif "configure" in reply.keys():
-                    configure(tb, "sr1-1", reply['configure'])
+                    configure(tb, "sr1-1", reply["configure"])
 
         except KeyboardInterrupt:
             return
