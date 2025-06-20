@@ -16,7 +16,7 @@ logging.basicConfig(
 )
 
 
-def connect_tb(tb_file):
+def handle_connect(tb_file):
     try:
         log.info(f'Loading testbed file "{tb_file}".')
         tb = load(tb_file)
@@ -34,12 +34,12 @@ def connect_tb(tb_file):
     return tb
 
 
-def run_command(tb, dev, command):
+def handle_command(tb, dev, command):
     resp = tb.devices[dev].execute(command)
     return resp
 
 
-def configure(tb, dev, conf_list):
+def handle_configure(tb, dev, conf_list):
     try:
         tb.devices[dev].configure(conf_list)
         log.info(f"Device {dev} configured successully.")
@@ -49,14 +49,14 @@ def configure(tb, dev, conf_list):
         log.error(f"Caught generic exception: {e}")
 
 
-def disconnect_tb(tb):
+def handle_disconnect(tb):
     print()
     log.info("Disconnecting from testbed, please wait.")
     tb.disconnect()
     log.info("Successfully disconnected from testbed.")
 
 
-def prompt_gpt(user_input):
+def handle_llm_prompt(user_input):
     try:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.responses.create(
@@ -71,7 +71,7 @@ def prompt_gpt(user_input):
         log.error(f"Caught exception: {e}")
 
 
-def get_prompt(filename):
+def developer_input_prompt(filename):
     with open(filename, "r") as f:
         prompt = f.read()
     return prompt
@@ -87,9 +87,9 @@ def menu():
 # LLM responses are in JSON format. Example:
 # {"type": "response"}
 # There are 3 types: command, answer and configure
-def iosxe_chat_loop(tb, prompt_file):
+def handle_iosxe_chat(tb, prompt_file):
     context_depth = 0
-    prompt = get_prompt(prompt_file)
+    prompt = developer_input_prompt(prompt_file)
 
     menu()
 
@@ -99,19 +99,23 @@ def iosxe_chat_loop(tb, prompt_file):
             input_query = input(f"[{context_depth}]Prompt: ")
             print()
 
-            # Create a new context window
+            # handle user commands
             match input_query:
+                # create a new context window
                 case "/new":
                     log.info("Starting new context window.\n")
                     user_input = [{"role": "developer", "content": prompt}]
                     context_depth = 0
                     continue
+                # display the developer prompt
                 case "/prompt":
                     print(prompt)
                     continue
+                # display the menu
                 case "/menu":
                     menu()
                     continue
+                # don't send empty commands to the LLM
                 case "":
                     continue
 
@@ -119,7 +123,7 @@ def iosxe_chat_loop(tb, prompt_file):
 
             context_depth += 1
 
-            response = prompt_gpt(user_input)
+            response = handle_llm_prompt(user_input)
             if response is not None:
                 if response.usage is not None:
                     log.info(f"Total Tokens: {response.usage.total_tokens}")
@@ -139,7 +143,9 @@ def iosxe_chat_loop(tb, prompt_file):
                     user_input.append(
                         {"role": "assistant", "content": response.output_text}
                     )
-                    command_resp = run_command(tb, "sr1-1", reply["command"])
+                    command_resp = handle_command(
+                        tb, "sr1-1", reply["command"]
+                    )
 
                     user_input.append(
                         {
@@ -148,7 +154,7 @@ def iosxe_chat_loop(tb, prompt_file):
                         }
                     )
 
-                    response = prompt_gpt(user_input)
+                    response = handle_llm_prompt(user_input)
                     if response is not None:
                         if response.usage is not None:
                             log.info(
@@ -172,7 +178,7 @@ def iosxe_chat_loop(tb, prompt_file):
                                 f"Reply did not contain an answer {reply}"
                             )
                 elif "configure" in reply.keys():
-                    configure(tb, "sr1-1", reply["configure"])
+                    handle_configure(tb, "sr1-1", reply["configure"])
 
         except KeyboardInterrupt:
             return
@@ -195,9 +201,9 @@ def main():
         log.error(f"File {prompt_file} does not exist.")
         sys.exit(1)
 
-    tb = connect_tb(tb_file)
-    iosxe_chat_loop(tb, prompt_file)
-    disconnect_tb(tb)
+    tb = handle_connect(tb_file)
+    handle_iosxe_chat(tb, prompt_file)
+    handle_disconnect(tb)
 
 
 if __name__ == "__main__":
