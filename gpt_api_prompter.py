@@ -86,7 +86,7 @@ def menu():
 
 def log_total_tokens(total_tokens):
     print()
-    log.info(f"Total toekns consumed for the session {total_tokens}")
+    log.info(f"Total tokens consumed for the session {total_tokens}")
 
 
 # LLM responses are in JSON format. Example:
