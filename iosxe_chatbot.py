@@ -3,7 +3,11 @@ import logging
 import os
 import sys
 from genie.testbed import load
-from unicon.core.errors import ConnectionError, SubCommandFailure
+from unicon.core.errors import (
+    ConnectionError,
+    SubCommandFailure,
+    CredentialsExhaustedError,
+)
 from openai import OpenAI, OpenAIError
 
 
@@ -144,7 +148,7 @@ def handle_iosxe_chat(tb, prompt_file):
             reply, total_tokens = handle_llm_prompt(user_input)
             if reply == {}:
                 log.error("Received an empty dict from handle_llm_prompt().")
-                return token_count
+                continue
 
             token_count += total_tokens
             if "answer" in reply.keys():
@@ -166,7 +170,7 @@ def handle_iosxe_chat(tb, prompt_file):
             reply, total_tokens = handle_llm_prompt(user_input)
             if reply == {}:
                 log.error("Received an empty dict from handle_llm_prompt().")
-                return token_count
+                continue
 
             token_count += total_tokens
             if "answer" in reply.keys():

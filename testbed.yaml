@@ -4,7 +4,7 @@ testbed:
     credentials:
         default:
             username: 'cisco'
-            password: 'cisco'
+            password: "%ENV{TESTBED_PASSWORD}"
 
     servers:
         zeus:
@@ -16,7 +16,7 @@ testbed:
             credentials:
                 default:
                     username: "root"
-                    password: "cisco"
+                    password: "%ENV{TESTBED_PASSWORD}"
 
 devices:
     sr1-1:
