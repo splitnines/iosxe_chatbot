@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import sys
 from genie.testbed import load
 from unicon.core.errors import (
@@ -103,12 +104,12 @@ def handle_raw_command():
 
 def menu():
     print("\nPress Ctrl-c to exit.\n")
-    print('Enter ":new" for a new context window.')
-    print('Enter ":menu" to print this menu.')
-    print('Enter ":prompt" to print the developer prompt.')
-    print('Enter ":reload" to reload the prompt\n\n')
+    print('Enter "/new" for a new context window.')
+    print('Enter "/menu" to print this menu.')
+    print('Enter "/prompt" to print the developer prompt.')
+    print('Enter "/reload" to reload the prompt\n\n')
     # TODO: add raw command retrieval option
-    # print("Enter ":command" to run a command directly on the IOS-XE
+    # print("Enter "/command" to run a command directly on the IOS-XE
     # device.\n\n)
 
 
@@ -124,8 +125,8 @@ def user_cmd_parser(user_cmd_args):
     if user_cmd_args["user_input"] == "":
         return user_cmd_args
 
-    if user_cmd_args["input_query"].startswith(":n"):
-        log.info("Starting new context window.\n")
+    if user_cmd_args["input_query"].startswith("/n"):
+        log.info("New context window started.\n")
         user_cmd_args["user_input"] = [
             {
                 "role": "developer",
@@ -133,16 +134,16 @@ def user_cmd_parser(user_cmd_args):
             }
         ]
         user_cmd_args["context_depth"] = 0
-    elif user_cmd_args["input_query"].startswith(":p"):
+    elif user_cmd_args["input_query"].startswith("/p"):
         print(user_cmd_args["prompt"])
-    elif user_cmd_args["input_query"].startswith(":m"):
+    elif user_cmd_args["input_query"].startswith("/m"):
         menu()
-    elif user_cmd_args["input_query"].startswith(":r"):
+    elif user_cmd_args["input_query"].startswith("/r"):
         user_cmd_args["prompt"] = developer_input_prompt(
             user_cmd_args["prompt_file"]
         )
-        log.info("Reloading prompt.")
-        log.info("Starting new context window.\n")
+        log.info("Prompt reloaded.")
+        log.info("New context window started.\n")
         user_cmd_args["user_input"] = [
             {
                 "role": "developer",
@@ -150,6 +151,17 @@ def user_cmd_parser(user_cmd_args):
             }
         ]
         user_cmd_args["context_depth"] = 0
+    elif user_cmd_args["input_query"].startswith("/c"):
+        parse_command_re = re.compile(r"^/c[omand\s]+(.+)")
+        match = parse_command_re.search(user_cmd_args["input_query"])
+        if match:
+            command = match.group(1)
+            command_resp = handle_command(
+                user_cmd_args["testbed"], user_cmd_args["device"], command
+            )
+            print(command_resp)
+        else:
+            log.error("Could not parse the command.\n")
 
     return user_cmd_args
 
@@ -159,6 +171,8 @@ def user_cmd_parser(user_cmd_args):
 # There are 3 types: command, answer and configure
 def handle_iosxe_chat(tb, prompt_file):
     user_cmd_parser_args = {}
+    user_cmd_parser_args["testbed"] = tb
+    user_cmd_parser_args["device"] = "sr1-1"
     user_cmd_parser_args["context_depth"] = 0
     user_cmd_parser_args["prompt_file"] = prompt_file
     token_count = 0
@@ -174,13 +188,13 @@ def handle_iosxe_chat(tb, prompt_file):
     while True:
         try:
             user_cmd_parser_args["input_query"] = input(
-                f"[{user_cmd_parser_args['context_depth']}] IOS-XE Chatbot > "
+                f"[{user_cmd_parser_args['context_depth']}] IOS-XE Chatbot $ "
             )
             print()
 
-            # parse the any commands from the user
+            # parse the escaped commands from the user
             if (
-                user_cmd_parser_args["input_query"].startswith(":")
+                user_cmd_parser_args["input_query"].startswith("/")
                 or user_cmd_parser_args["input_query"] == ""
             ):
                 user_cmd_parser_args = user_cmd_parser(user_cmd_parser_args)
@@ -215,7 +229,11 @@ def handle_iosxe_chat(tb, prompt_file):
                 user_cmd_parser_args["user_input"].append(
                     {"role": "assistant", "content": str(reply)}
                 )
-                command_resp = handle_command(tb, "sr1-1", reply["command"])
+                command_resp = handle_command(
+                    user_cmd_parser_args["testbed"],
+                    user_cmd_parser_args["device"],
+                    reply["command"],
+                )
 
                 user_cmd_parser_args["user_input"].append(
                     {
