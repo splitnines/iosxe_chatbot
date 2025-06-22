@@ -29,11 +29,40 @@ be in the same list, not a separate dictionary:
 
 {"command": ["show ip interface brief", "show ip protocol"]}
 
+The JSON schema for a command response is:
+{
+  "type": "object",
+  "patternProperties": {
+    "^.*$": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}
+
 A configuration response must list the configuration commands in the order they 
 are to be entered.  A confuiguration response should look like the following:
 
+
 {"configure": ["interface GigabitEthernet1", "description ADD DESCRIPTION
 HERE", "ip address 172.16.10.1 255.255.255.0", "no shutdown"]}
+
+The JSON schema for a command response is:
+{
+  "type": "object",
+  "patternProperties": {
+    "^.*$": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}
 
 An answer response JSON format must be the key followed by a string:
 {"key": "value"}
@@ -41,6 +70,19 @@ An answer response JSON format must be the key followed by a string:
 An answer respone should look like this:
 
 {"answer": "IP address 10.1.100.3 is assigned to interface GigabitEthernet1"}
+
+The JSON schema for an answer response is:
+{
+  "type": "object",
+  "minProperties": 1,
+  "maxProperties": 1,
+  "patternProperties": {
+    "^.*$": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}
 
 You may be as verbose with your answers as is neccesary.
 
@@ -77,4 +119,3 @@ Tunnel1                192.168.1.2     YES NVRAM  up                    up
 <assistant_response>
 {"answer": "IP address 10.1.100.3 is assigned to interface GigabitEthernet1"}
 </assistant_response>
-

@@ -97,7 +97,8 @@ def menu():
     print("\nPress Ctrl-c to exit.\n")
     print('Enter "/new" for a new context window.')
     print('Enter "/menu" to print this menu.')
-    print('Enter "/prompt" to print the developer prompt.\n\n')
+    print('Enter "/prompt" to print the developer prompt.')
+    print('Enter "/reload" to reload the prompt\n\n')
 
 
 def log_total_tokens(total_tokens):
@@ -136,6 +137,13 @@ def handle_iosxe_chat(tb, prompt_file):
                 # display the menu
                 case "/menu":
                     menu()
+                    continue
+                case "/reload":
+                    prompt = developer_input_prompt(prompt_file)
+                    log.info("Reloading prompt.")
+                    log.info("Starting new context window.\n")
+                    user_input = [{"role": "developer", "content": prompt}]
+                    context_depth = 0
                     continue
                 # don't send empty commands to the LLM
                 case "":
@@ -202,7 +210,7 @@ def main():
         log.error(f"File {tb_file} does not exist.")
         sys.exit(1)
 
-    prompt_file = "cisco_iosxe_prompt.md"
+    prompt_file = "iosxe_prompt.md"
     if not os.path.exists(prompt_file):
         log.error(f"File {prompt_file} does not exist.")
         sys.exit(1)
