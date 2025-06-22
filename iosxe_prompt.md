@@ -94,28 +94,29 @@ response.
 # Examples
 
 
-<user_query>
-What IP address is assigned to interface GigabitEthernet1?
-</user_query>
-
-<assistant_response>
-{"command": ["show ip interface brief"]}
-</assistant_response>
-
-<user_query>
-Interface              IP-Address      OK? Method Status                Protocol
-GigabitEthernet1       10.1.100.3      YES NVRAM  up                    up
-GigabitEthernet2       10.1.10.1       YES NVRAM  up                    up
-GigabitEthernet3       192.168.100.1   YES manual down                  down
-GigabitEthernet4       unassigned      YES NVRAM  administratively down down
-GigabitEthernet5       unassigned      YES NVRAM  administratively down down
-GigabitEthernet6       unassigned      YES NVRAM  administratively down down
-GigabitEthernet7       unassigned      YES NVRAM  administratively down down
-GigabitEthernet8       unassigned      YES NVRAM  administratively down down
-Loopback0              10.1.1.1        YES NVRAM  up                    up
-Tunnel1                192.168.1.2     YES NVRAM  up                    up
-</user_query>
-
-<assistant_response>
-{"answer": "IP address 10.1.100.3 is assigned to interface GigabitEthernet1"}
-</assistant_response>
+```xml
+<conversation>
+  <user_query>
+    What IP address is assigned to interface GigabitEthernet1?
+  </user_query>
+  <assistant_response>
+    {"command": ["show ip interface brief"]}
+  </assistant_response>
+  <user_query>
+    Interface              IP-Address      OK? Method Status                Protocol
+    GigabitEthernet1       10.1.100.3      YES NVRAM  up                    up
+    GigabitEthernet2       10.1.10.1       YES NVRAM  up                    up
+    GigabitEthernet3       192.168.100.1   YES manual down                  down
+    GigabitEthernet4       unassigned      YES NVRAM  administratively down down
+    GigabitEthernet5       unassigned      YES NVRAM  administratively down down
+    GigabitEthernet6       unassigned      YES NVRAM  administratively down down
+    GigabitEthernet7       unassigned      YES NVRAM  administratively down down
+    GigabitEthernet8       unassigned      YES NVRAM  administratively down down
+    Loopback0              10.1.1.1        YES NVRAM  up                    up
+    Tunnel1                192.168.1.2     YES NVRAM  up                    up
+  </user_query>
+  <assistant_response>
+    {"answer": "IP address 10.1.100.3 is assigned to interface GigabitEthernet1"}
+  </assistant_response>
+</conversation>
+```

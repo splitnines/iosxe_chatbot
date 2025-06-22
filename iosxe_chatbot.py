@@ -28,14 +28,17 @@ def handle_connect(tb_file):
         tb.connect(log_stdout=False, logfile=False)
         log.info("Successfully connected to testbed")
 
+        return tb
+
+    except CredentialsExhaustedError as e:
+        log.error(f"Login failed: {e}")
+        sys.exit(1)
     except ConnectionError as e:
         log.error(f"Failed to connect: {e}")
         sys.exit(1)
     except Exception as e:
         log.error(f"Caught exception {e}")
         sys.exit(1)
-
-    return tb
 
 
 def handle_command(tb, dev, command):
@@ -93,89 +96,137 @@ def developer_input_prompt(filename):
     return prompt
 
 
+# TODO: implement raw command option
+def handle_raw_command():
+    pass
+
+
 def menu():
     print("\nPress Ctrl-c to exit.\n")
-    print('Enter "/new" for a new context window.')
-    print('Enter "/menu" to print this menu.')
-    print('Enter "/prompt" to print the developer prompt.')
-    print('Enter "/reload" to reload the prompt\n\n')
+    print('Enter ":new" for a new context window.')
+    print('Enter ":menu" to print this menu.')
+    print('Enter ":prompt" to print the developer prompt.')
+    print('Enter ":reload" to reload the prompt\n\n')
+    # TODO: add raw command retrieval option
+    # print("Enter ":command" to run a command directly on the IOS-XE
+    # device.\n\n)
 
 
 def log_total_tokens(total_tokens):
-    print()
-    log.info(f"Total tokens consumed for the session {total_tokens}")
+    try:
+        print()
+        log.info(f"Total tokens consumed for the session {total_tokens}")
+    except KeyboardInterrupt as e:
+        log.error(f"Caught KeyboardInterrupt: {e}")
+
+
+def user_cmd_parser(user_cmd_args):
+    if user_cmd_args["user_input"] == "":
+        return user_cmd_args
+
+    if user_cmd_args["input_query"].startswith(":n"):
+        log.info("Starting new context window.\n")
+        user_cmd_args["user_input"] = [
+            {
+                "role": "developer",
+                "content": user_cmd_args["prompt"],
+            }
+        ]
+        user_cmd_args["context_depth"] = 0
+    elif user_cmd_args["input_query"].startswith(":p"):
+        print(user_cmd_args["prompt"])
+    elif user_cmd_args["input_query"].startswith(":m"):
+        menu()
+    elif user_cmd_args["input_query"].startswith(":r"):
+        user_cmd_args["prompt"] = developer_input_prompt(
+            user_cmd_args["prompt_file"]
+        )
+        log.info("Reloading prompt.")
+        log.info("Starting new context window.\n")
+        user_cmd_args["user_input"] = [
+            {
+                "role": "developer",
+                "content": user_cmd_args["prompt"],
+            }
+        ]
+        user_cmd_args["context_depth"] = 0
+
+    return user_cmd_args
 
 
 # LLM responses are in JSON format. Example:
 # {"type": "response"}
 # There are 3 types: command, answer and configure
 def handle_iosxe_chat(tb, prompt_file):
-    context_depth = 0
+    user_cmd_parser_args = {}
+    user_cmd_parser_args["context_depth"] = 0
+    user_cmd_parser_args["prompt_file"] = prompt_file
     token_count = 0
-    prompt = developer_input_prompt(prompt_file)
+    user_cmd_parser_args["prompt"] = developer_input_prompt(
+        user_cmd_parser_args["prompt_file"]
+    ).strip()
 
     menu()
 
-    user_input = [{"role": "developer", "content": prompt}]
+    user_cmd_parser_args["user_input"] = [
+        {"role": "developer", "content": user_cmd_parser_args["prompt"]}
+    ]
     while True:
         try:
-            input_query = input(f"[{context_depth}]Prompt: ")
+            user_cmd_parser_args["input_query"] = input(
+                f"[{user_cmd_parser_args['context_depth']}] IOS-XE Chatbot > "
+            )
             print()
 
-            # handle user commands
-            match input_query:
-                # create a new context window
-                case "/new":
-                    log.info("Starting new context window.\n")
-                    user_input = [{"role": "developer", "content": prompt}]
-                    context_depth = 0
-                    continue
-                # display the developer prompt
-                case "/prompt":
-                    print(prompt)
-                    continue
-                # display the menu
-                case "/menu":
-                    menu()
-                    continue
-                case "/reload":
-                    prompt = developer_input_prompt(prompt_file)
-                    log.info("Reloading prompt.")
-                    log.info("Starting new context window.\n")
-                    user_input = [{"role": "developer", "content": prompt}]
-                    context_depth = 0
-                    continue
-                # don't send empty commands to the LLM
-                case "":
-                    continue
+            # parse the any commands from the user
+            if (
+                user_cmd_parser_args["input_query"].startswith(":")
+                or user_cmd_parser_args["input_query"] == ""
+            ):
+                user_cmd_parser_args = user_cmd_parser(user_cmd_parser_args)
+                continue
 
-            user_input.append({"role": "user", "content": input_query})
+            #
+            user_cmd_parser_args["user_input"].append(
+                {
+                    "role": "user",
+                    "content": user_cmd_parser_args["input_query"],
+                }
+            )
 
-            context_depth += 1
+            user_cmd_parser_args["context_depth"] += 1
 
-            reply, total_tokens = handle_llm_prompt(user_input)
+            reply, total_tokens = handle_llm_prompt(
+                user_cmd_parser_args["user_input"]
+            )
             if reply == {}:
                 log.error("Received an empty dict from handle_llm_prompt().")
                 continue
 
             token_count += total_tokens
             if "answer" in reply.keys():
-                user_input.append({"role": "assistant", "content": str(reply)})
+                user_cmd_parser_args["user_input"].append(
+                    {"role": "assistant", "content": str(reply)}
+                )
                 print(f"\n{reply['answer']}\n")
                 continue
 
             elif "command" in reply.keys():
-                user_input.append({"role": "assistant", "content": str(reply)})
+                user_cmd_parser_args["user_input"].append(
+                    {"role": "assistant", "content": str(reply)}
+                )
                 command_resp = handle_command(tb, "sr1-1", reply["command"])
 
-                user_input.append(
+                user_cmd_parser_args["user_input"].append(
                     {
                         "role": "user",
                         "content": str(command_resp),
                     }
                 )
 
-            reply, total_tokens = handle_llm_prompt(user_input)
+            reply, total_tokens = handle_llm_prompt(
+                user_cmd_parser_args["user_input"]
+            )
             if reply == {}:
                 log.error("Received an empty dict from handle_llm_prompt().")
                 continue
@@ -184,7 +235,7 @@ def handle_iosxe_chat(tb, prompt_file):
             if "answer" in reply.keys():
                 print(f"\n{reply['answer']}\n")
 
-                user_input.append(
+                user_cmd_parser_args["user_input"].append(
                     {
                         "role": "assistant",
                         "content": str(reply),
@@ -217,7 +268,10 @@ def main():
 
     tb = handle_connect(tb_file)
     total_tokens = handle_iosxe_chat(tb, prompt_file)
-    log_total_tokens(total_tokens)
+    try:
+        log_total_tokens(total_tokens)
+    except KeyboardInterrupt:
+        log.warning("KeyboardInterrupt occurred during token logging.")
     handle_disconnect(tb)
 
 
