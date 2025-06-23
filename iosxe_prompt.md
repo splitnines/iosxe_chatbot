@@ -23,24 +23,12 @@ very important to obey this format.
 
 The JSON format should be:
 
-```json
-{
-    "key": [
-        "value1", "value2", "value3", ....
-    ]
-}
-```
+{"key": ["value1", "value2", "value3", ....]}
 
 A command response should look like the following.  Multiple commands need to
 be in the same list, not a separate dictionary:
 
-```json
-{
-    "command": [
-        "show ip interface brief", "show ip protocol"
-    ]
-}
-```
+{"command": ["show ip interface brief", "show ip protocol"]}
 
 The JSON schema for a command response is:
 
@@ -62,15 +50,8 @@ The JSON schema for a command response is:
 A configuration response must list the configuration commands in the order they 
 are to be entered.  A confuiguration response should look like the following:
 
+{"configure": ["interface GigabitEthernet1", "description ADD DESCRIPTIONHERE", "ip address 172.16.10.1 255.255.255.0", "no shutdown"]}
 
-```json
-{
-    "configure": [
-        "interface GigabitEthernet1", "description ADD DESCRIPTIONHERE",
-        "ip address 172.16.10.1 255.255.255.0", "no shutdown"
-    ]
-}
-```
 
 The JSON schema for a command response is:
 
@@ -91,19 +72,11 @@ The JSON schema for a command response is:
 
 An answer response JSON format must be the key followed by a string:
 
-```json
-{
-    "key": "value"
-}
-```
+{"key": "value"}
 
 An answer respone should look like this:
 
-```json
-{
-    "answer": "IP address 10.1.100.3 is assigned to interface GigabitEthernet1"
-}
-```
+{"answer": "IP address 10.1.100.3 is assigned to interface GigabitEthernet1"}
 
 The JSON schema for an answer response is:
 

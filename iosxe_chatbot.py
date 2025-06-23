@@ -206,7 +206,7 @@ def handle_iosxe_chat(tb, prompt_file):
     while True:
         try:
             user_cmd_parser_args["input_query"] = input(
-                f"[{user_cmd_parser_args['context_depth']}]"
+                f"[{user_cmd_parser_args['context_depth']}] "
                 f"({user_cmd_parser_args['device']}) "
                 "IOS-XE Chatbot$ "
             )
@@ -281,7 +281,7 @@ def handle_iosxe_chat(tb, prompt_file):
                 )
             elif "configure" in reply.keys():
                 conf_resp = handle_configure(
-                    user_cmd_parser_args["tb"],
+                    user_cmd_parser_args["testbed"],
                     user_cmd_parser_args["device"],
                     reply["configure"],
                 )
