@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import platform
 import pydoc
 import re
 import sys
@@ -298,7 +299,15 @@ def handle_iosxe_chat(tb, prompt_file):
             log.error(f"Caught exception: {e}")
 
 
+def clear_screen():
+    if platform.system() == "Windows":
+        os.system("cls")
+    else:
+        os.system("clear")
+
+
 def main():
+    clear_screen()
     tb_file = "testbed.yaml"
     if not os.path.exists(tb_file):
         log.error(f"File {tb_file} does not exist.")
