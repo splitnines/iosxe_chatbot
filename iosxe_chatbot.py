@@ -97,34 +97,37 @@ def developer_input_prompt(filename):
     return prompt
 
 
-# TODO: implement raw command option
-def handle_raw_command():
-    pass
-
-
 def menu():
-    print("\nPress Ctrl-c to exit.\n")
-    print('Enter "/new" for a new context window.')
-    print('Enter "/menu" to print this menu.')
-    print('Enter "/prompt" to print the developer prompt.')
-    print('Enter "/reload" to reload the prompt\n\n')
-    # TODO: add raw command retrieval option
-    # print("Enter "/command" to run a command directly on the IOS-XE
-    # device.\n\n)
+    menu_string = """
+
+        IOS-XE Chatbot
+
+        Operator Command Menu:
+
+        /command - run a command directly on the device
+        /menu    - print this menu
+        /new     - start a new context window
+        /prompt  - print the developer prompt
+        /quit    - quit the program
+
+
+        To interact with the LMM just type you query.
+
+        """
+
+    print(menu_string)
 
 
 def log_total_tokens(total_tokens):
-    try:
-        print()
-        log.info(f"Total tokens consumed for the session {total_tokens}")
-    except KeyboardInterrupt as e:
-        log.error(f"Caught KeyboardInterrupt: {e}")
+    print()
+    log.info(f"Total tokens consumed for the session {total_tokens}")
 
 
 def user_cmd_parser(user_cmd_args):
     if user_cmd_args["user_input"] == "":
         return user_cmd_args
 
+    # Start a new context window
     if user_cmd_args["input_query"].startswith("/n"):
         log.info("New context window started.\n")
         user_cmd_args["user_input"] = [
@@ -134,10 +137,16 @@ def user_cmd_parser(user_cmd_args):
             }
         ]
         user_cmd_args["context_depth"] = 0
+
+    # Display the developer prompt
     elif user_cmd_args["input_query"].startswith("/p"):
         print(user_cmd_args["prompt"])
+
+    # Display the command menu
     elif user_cmd_args["input_query"].startswith("/m"):
         menu()
+
+    # Reload the developer prompt
     elif user_cmd_args["input_query"].startswith("/r"):
         user_cmd_args["prompt"] = developer_input_prompt(
             user_cmd_args["prompt_file"]
@@ -151,6 +160,8 @@ def user_cmd_parser(user_cmd_args):
             }
         ]
         user_cmd_args["context_depth"] = 0
+
+    # Send a command to the device directly
     elif user_cmd_args["input_query"].startswith("/c"):
         parse_command_re = re.compile(r"^/c[omand\s]+(.+)")
         match = parse_command_re.search(user_cmd_args["input_query"])
@@ -159,9 +170,15 @@ def user_cmd_parser(user_cmd_args):
             command_resp = handle_command(
                 user_cmd_args["testbed"], user_cmd_args["device"], command
             )
-            print(command_resp)
+            print(command_resp, "\n")
         else:
             log.error("Could not parse the command.\n")
+
+    # Quit the program
+    elif user_cmd_args["input_query"].startswith("/q"):
+        log_total_tokens(user_cmd_args["total_tokens"])
+        handle_disconnect(user_cmd_args["testbed"])
+        sys.exit(0)
 
     return user_cmd_args
 
@@ -170,15 +187,16 @@ def user_cmd_parser(user_cmd_args):
 # {"type": "response"}
 # There are 3 types: command, answer and configure
 def handle_iosxe_chat(tb, prompt_file):
-    user_cmd_parser_args = {}
-    user_cmd_parser_args["testbed"] = tb
-    user_cmd_parser_args["device"] = "sr1-1"
-    user_cmd_parser_args["context_depth"] = 0
-    user_cmd_parser_args["prompt_file"] = prompt_file
+    user_cmd_parser_args = {
+        "testbed": tb,
+        "device": "sr1-1",
+        "context_depth": 0,
+        "prompt_file": prompt_file,
+        "total_tokens": 0,
+        "prompt": developer_input_prompt(prompt_file),
+    }
+
     token_count = 0
-    user_cmd_parser_args["prompt"] = developer_input_prompt(
-        user_cmd_parser_args["prompt_file"]
-    ).strip()
 
     menu()
 
@@ -188,7 +206,9 @@ def handle_iosxe_chat(tb, prompt_file):
     while True:
         try:
             user_cmd_parser_args["input_query"] = input(
-                f"[{user_cmd_parser_args['context_depth']}] IOS-XE Chatbot $ "
+                f"[{user_cmd_parser_args['context_depth']}]"
+                f"({user_cmd_parser_args['device']}) "
+                "IOS-XE Chatbot$ "
             )
             print()
 
@@ -210,14 +230,14 @@ def handle_iosxe_chat(tb, prompt_file):
 
             user_cmd_parser_args["context_depth"] += 1
 
-            reply, total_tokens = handle_llm_prompt(
+            reply, token_count = handle_llm_prompt(
                 user_cmd_parser_args["user_input"]
             )
             if reply == {}:
                 log.error("Received an empty dict from handle_llm_prompt().")
                 continue
 
-            token_count += total_tokens
+            user_cmd_parser_args["total_tokens"] += token_count
             if "answer" in reply.keys():
                 user_cmd_parser_args["user_input"].append(
                     {"role": "assistant", "content": str(reply)}
@@ -242,14 +262,14 @@ def handle_iosxe_chat(tb, prompt_file):
                     }
                 )
 
-            reply, total_tokens = handle_llm_prompt(
+            reply, token_count = handle_llm_prompt(
                 user_cmd_parser_args["user_input"]
             )
             if reply == {}:
                 log.error("Received an empty dict from handle_llm_prompt().")
                 continue
 
-            token_count += total_tokens
+            user_cmd_parser_args["total_tokens"] += token_count
             if "answer" in reply.keys():
                 print(f"\n{reply['answer']}\n")
 
@@ -260,11 +280,13 @@ def handle_iosxe_chat(tb, prompt_file):
                     }
                 )
             elif "configure" in reply.keys():
-                conf_resp = handle_configure(tb, "sr1-1", reply["configure"])
+                conf_resp = handle_configure(
+                    user_cmd_parser_args["tb"],
+                    user_cmd_parser_args["device"],
+                    reply["configure"],
+                )
                 print(f"\n!\n{conf_resp}!\n")
 
-        except KeyboardInterrupt:
-            return token_count
         except OpenAIError as e:
             log.error(f"Caught OpenAIError: {e}.")
         except (json.JSONDecodeError, json.decoder.JSONDecodeError) as e:
@@ -285,12 +307,16 @@ def main():
         sys.exit(1)
 
     tb = handle_connect(tb_file)
-    total_tokens = handle_iosxe_chat(tb, prompt_file)
+
     try:
+        total_tokens = handle_iosxe_chat(tb, prompt_file)
         log_total_tokens(total_tokens)
+        handle_disconnect(tb)
     except KeyboardInterrupt:
-        log.warning("KeyboardInterrupt occurred during token logging.")
-    handle_disconnect(tb)
+        log.warning("KeyboardInterrupt....exiting.")
+        handle_disconnect(tb)
+    except Exception as e:
+        log.error(f"Exception caught in main(): {e}")
 
 
 if __name__ == "__main__":
