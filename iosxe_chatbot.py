@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import pydoc
 import re
 import sys
 from genie.testbed import load
@@ -170,7 +171,9 @@ def user_cmd_parser(user_cmd_args):
             command_resp = handle_command(
                 user_cmd_args["testbed"], user_cmd_args["device"], command
             )
-            print(command_resp, "\n")
+            os.environ["PAGER"] = "more"
+            pydoc.pager(command_resp)
+            # print(command_resp, "\n")
         else:
             log.error("Could not parse the command.\n")
 
