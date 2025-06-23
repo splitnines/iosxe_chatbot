@@ -1,105 +1,84 @@
-# Cisco IOS-XE Chatbot with OpenAI GPT
+# IOS-XE Chatbot
 
-This project implements an interactive chatbot that interfaces with Cisco IOS-XE routers and switches using natural language queries. It leverages the OpenAI GPT API (via the `openai` Python client) and Cisco pyATS for command execution and configuration. The assistant is prompt-engineered to strictly return JSON-based responses that your Python program can parse and act on.
-
----
+IOS-XE Chatbot is a Python-based interactive CLI assistant that connects a local terminal to a Cisco IOS-XE router or switch using the OpenAI GPT-4o LLM. It enables natural language interaction with the device, translating user queries into IOS-XE commands and configurations.
 
 ## Features
 
-- Query IOS-XE device status in natural language  
-- Automatically runs `show` commands and returns results  
-- Supports generating and applying configuration commands  
-- All LLM interactions are done using OpenAI's GPT-4o model  
-- Conversation context is preserved until reset with `/new`
-
----
+- Uses OpenAI GPT-4o API to process natural language queries
+- Interfaces with Cisco IOS-XE devices via `pyATS` and `Unicon`
+- Supports context-aware conversations
+- JSON-based response handling (commands, answers, or configurations)
+- Extensible prompt design via markdown template
+- Command menu for interactive use
 
 ## Requirements
 
-- Python 3.9+
-- Cisco pyATS and Unicon
-- OpenAI Python SDK
-- A valid OpenAI API key
-- A testbed YAML file for your IOS-XE device (`testbed.yaml`)
-
-Install dependencies:
+Install dependencies using `requirements.txt`:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Example `requirements.txt`:
+Ensure the following are installed:
+- Python 3.8+
+- Access to Cisco device(s) defined in a `testbed.yaml`
+- OpenAI API Key
 
-```
-genie
-unicon
-openai
-```
+## Files
 
----
-
-## Setup
-
-1. Place your Cisco testbed definition in a file named `testbed.yaml`.
-2. Ensure `cisco_iosxe_prompt.md` is present in the same directory.
-3. Set your OpenAI API key:
-
-```bash
-export OPENAI_API_KEY="sk-..."
-```
-
----
+- `iosxe_chatbot.py`: Main program logic and LLM interface
+- `iosxe_prompt.md`: Developer/system prompt for LLM role definition
+- `testbed.yaml`: PyATS-compatible device connection configuration
+- `requirements.txt`: Dependency list
+- `LICENSE`: Project license
 
 ## Usage
 
-Run the chatbot:
+1. Export your OpenAI API key:
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+```
+
+2. Prepare your `testbed.yaml` file in the working directory.
+
+3. Run the chatbot:
 
 ```bash
 python iosxe_chatbot.py
 ```
 
-### Available Commands
-
-- `/new` — Start a new chat session (resets context)
-- `/menu` — Show help menu
-- `/prompt` — Print the current system prompt used for the LLM
-
-### Example Interaction
+4. Use the CLI menu for interacting with the assistant:
 
 ```
-[0]Prompt: What is the IP address of GigabitEthernet1?
+/command - run a command directly on the device
+/menu    - print the menu
+/new     - start a new context window
+/prompt  - print the developer prompt
+/quit    - exit the program
 ```
 
-LLM response:
+Ask questions about the device like:
 
-```json
-{"command": ["show ip interface brief"]}
+```
+What is the IP address of interface GigabitEthernet1?
 ```
 
-After device command execution, it continues:
+The assistant will reply with:
+- JSON command if input is needed from the device
+- JSON answer if an answer can be given
+- JSON configuration to be applied (if appropriate)
 
-```json
-{"answer": "IP address 10.1.100.3 is assigned to interface GigabitEthernet1"}
-```
+## Prompt Design
 
----
+Responses are expected in valid JSON:
 
-## File Structure
+- Command: `{"command": ["show version"]}`
+- Answer: `{"answer": "The device uptime is 5 days."}`
+- Configuration: `{"configure": ["interface Lo1", "ip address 1.1.1.1 255.255.255.0"]}`
 
-- `iosxe_chatbot.py` — Main CLI chat interface
-- `cisco_iosxe_prompt.md` — System prompt to guide the LLM
-- `testbed.yaml` — Cisco pyATS device definition file
-
----
-
-## Notes
-
-- The device in your testbed file should be named `sr1-1`.
-- The chatbot only accepts valid JSON responses (`command`, `configure`, or `answer`).
-- Token usage for the session is logged at the end.
-
----
+See `iosxe_prompt.md` for full schema and examples.
 
 ## License
 
-MIT License
+See [LICENSE](./LICENSE) for license details.
