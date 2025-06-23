@@ -12,6 +12,7 @@ from unicon.core.errors import (
     CredentialsExhaustedError,
 )
 from openai import OpenAI, OpenAIError
+from lib.menu import menu
 
 
 log = logging.getLogger(__name__)
@@ -21,6 +22,9 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     # filename="basic.log",
 )
+
+# set the pager to be used
+os.environ["PAGER"] = "more"
 
 
 def handle_connect(tb_file):
@@ -99,30 +103,19 @@ def developer_input_prompt(filename):
     return prompt
 
 
-def menu():
-    menu_string = """
-
-        IOS-XE Chatbot
-
-        Operator Command Menu:
-
-        /command - run a command directly on the device
-        /menu    - print this menu
-        /new     - start a new context window
-        /prompt  - print the developer prompt
-        /quit    - quit the program
-
-
-        To interact with the LMM just type you query.
-
-        """
-
-    print(menu_string)
-
-
 def log_total_tokens(total_tokens):
     print()
     log.info(f"Total tokens consumed for the session {total_tokens}")
+
+
+def commit_change():
+    operator_permission = input("Commit changes [y/n]: ")
+    if operator_permission.lower() == "y":
+        return True
+    elif operator_permission.lower() == "n":
+        return False
+    else:
+        return commit_change()
 
 
 def user_cmd_parser(user_cmd_args):
@@ -172,8 +165,9 @@ def user_cmd_parser(user_cmd_args):
             command_resp = handle_command(
                 user_cmd_args["testbed"], user_cmd_args["device"], command
             )
-            os.environ["PAGER"] = "more"
+            print()
             pydoc.pager(command_resp)
+            print()
             # print(command_resp, "\n")
         else:
             log.error("Could not parse the command.\n")
@@ -284,6 +278,12 @@ def handle_iosxe_chat(tb, prompt_file):
                     }
                 )
             elif "configure" in reply.keys():
+                pydoc.pager("\n".join([line for line in reply["configure"]]))
+                print()
+                if commit_change() is False:
+                    print("Discarding changes.\n")
+                    continue
+
                 conf_resp = handle_configure(
                     user_cmd_parser_args["testbed"],
                     user_cmd_parser_args["device"],
