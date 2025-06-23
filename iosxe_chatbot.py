@@ -203,11 +203,13 @@ def handle_iosxe_chat(tb, prompt_file):
     ]
     while True:
         try:
-            user_cmd_parser_args["input_query"] = input(
-                f"[{user_cmd_parser_args['context_depth']}] "
-                f"({user_cmd_parser_args['device']}) "
-                "IOS-XE Chatbot$ "
+            shell_prompt = (
+                f"┌──({user_cmd_parser_args['context_depth']})-"
+                f"[{user_cmd_parser_args['device']}]-"
+                "[IOS-XE Chatbot]"
             )
+            print(shell_prompt)
+            user_cmd_parser_args["input_query"] = input("└─$ ")
             print()
 
             # parse the escaped commands from the user
