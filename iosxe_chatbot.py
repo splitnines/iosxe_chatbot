@@ -181,6 +181,18 @@ def user_cmd_parser(user_cmd_args):
     return user_cmd_args
 
 
+def operator_prompt(chat_args):
+    prompt = (
+        f"┌──({chat_args['context_depth']})-"
+        f"[{chat_args['device']}]-"
+        "[IOS-XE Chatbot]"
+    )
+    print(prompt)
+    operator_input = input("└─$ ")
+
+    return operator_input
+
+
 # LLM responses are in JSON format. Example:
 # {"type": "response"}
 # There are 3 types: command, answer and configure
@@ -203,13 +215,9 @@ def handle_iosxe_chat(tb, prompt_file):
     ]
     while True:
         try:
-            shell_prompt = (
-                f"┌──({user_cmd_parser_args['context_depth']})-"
-                f"[{user_cmd_parser_args['device']}]-"
-                "[IOS-XE Chatbot]"
+            user_cmd_parser_args["input_query"] = operator_prompt(
+                user_cmd_parser_args
             )
-            print(shell_prompt)
-            user_cmd_parser_args["input_query"] = input("└─$ ")
             print()
 
             # parse the escaped commands from the user
