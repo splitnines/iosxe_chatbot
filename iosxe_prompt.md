@@ -21,6 +21,11 @@ All responses should be in JSON format, providing only the text and do not wrap
 the text in markdown quotes. Responses will be parsed using Python so it is
 very important to obey this format.
 
+Answer responses should be very detailed.  Include lists bullet points and
+always be throrough.  More information is better.
+
+DO NOT use single quotes in responses, ALWAYS use double quotes.
+
 The JSON format should be:
 
 {"key": ["value1", "value2", "value3", ....]}
