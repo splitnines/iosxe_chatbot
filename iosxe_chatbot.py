@@ -250,6 +250,7 @@ def handle_iosxe_chat(tb, prompt_file):
                 user_cmd_parser_args["user_input"].append(
                     {"role": "assistant", "content": str(reply)}
                 )
+                # TODO: change to pager
                 print(f"\n{reply['answer']}\n")
                 continue
 
