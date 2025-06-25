@@ -70,7 +70,7 @@ def handle_disconnect(tb):
     log.info("Successfully disconnected from testbed.")
 
 
-def handle_llm_prompt(user_input):
+def handle_llm_api(user_input):
     try:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.responses.create(
@@ -118,7 +118,7 @@ def commit_change():
         return commit_change()
 
 
-def user_cmd_parser(user_cmd_args):
+def operator_cmds(user_cmd_args):
     if user_cmd_args["user_input"] == "":
         return user_cmd_args
 
@@ -135,7 +135,9 @@ def user_cmd_parser(user_cmd_args):
 
     # Display the developer prompt
     elif user_cmd_args["input_query"].startswith("/p"):
-        print(user_cmd_args["prompt"])
+        print()
+        pydoc.pager(user_cmd_args["prompt"])
+        print()
 
     # Display the command menu
     elif user_cmd_args["input_query"].startswith("/m"):
@@ -168,7 +170,6 @@ def user_cmd_parser(user_cmd_args):
             print()
             pydoc.pager(command_resp)
             print()
-            # print(command_resp, "\n")
         else:
             log.error("Could not parse the command.\n")
 
@@ -196,8 +197,8 @@ def operator_prompt(chat_args):
 # LLM responses are in JSON format. Example:
 # {"type": "response"}
 # There are 3 types: command, answer and configure
-def handle_iosxe_chat(tb, prompt_file):
-    user_cmd_parser_args = {
+def iosxe_chat_loop(tb, prompt_file):
+    iosxe_chat_args = {
         "testbed": tb,
         "device": "sr1-1",
         "context_depth": 0,
@@ -210,97 +211,99 @@ def handle_iosxe_chat(tb, prompt_file):
 
     menu()
 
-    user_cmd_parser_args["user_input"] = [
-        {"role": "developer", "content": user_cmd_parser_args["prompt"]}
+    iosxe_chat_args["user_input"] = [
+        {"role": "developer", "content": iosxe_chat_args["prompt"]}
     ]
     while True:
         try:
-            user_cmd_parser_args["input_query"] = operator_prompt(
-                user_cmd_parser_args
-            )
+            iosxe_chat_args["input_query"] = operator_prompt(iosxe_chat_args)
             print()
 
             # parse the escaped commands from the user
             if (
-                user_cmd_parser_args["input_query"].startswith("/")
-                or user_cmd_parser_args["input_query"] == ""
+                iosxe_chat_args["input_query"].startswith("/")
+                or iosxe_chat_args["input_query"] == ""
             ):
-                user_cmd_parser_args = user_cmd_parser(user_cmd_parser_args)
+                iosxe_chat_args = operator_cmds(iosxe_chat_args)
                 continue
 
             #
-            user_cmd_parser_args["user_input"].append(
+            iosxe_chat_args["user_input"].append(
                 {
                     "role": "user",
-                    "content": user_cmd_parser_args["input_query"],
+                    "content": iosxe_chat_args["input_query"],
                 }
             )
 
-            user_cmd_parser_args["context_depth"] += 1
+            iosxe_chat_args["context_depth"] += 1
 
-            reply, token_count = handle_llm_prompt(
-                user_cmd_parser_args["user_input"]
-            )
+            reply, token_count = handle_llm_api(iosxe_chat_args["user_input"])
             if reply == {}:
-                log.error("Received an empty dict from handle_llm_prompt().")
+                log.error("Received an empty dict from handle_llm_api().")
                 continue
 
-            user_cmd_parser_args["total_tokens"] += token_count
+            iosxe_chat_args["total_tokens"] += token_count
             if "answer" in reply.keys():
-                user_cmd_parser_args["user_input"].append(
+                iosxe_chat_args["user_input"].append(
                     {"role": "assistant", "content": str(reply)}
                 )
-                # TODO: change to pager
-                print(f"\n{reply['answer']}\n")
+                pydoc.pager(reply["answer"])
+                print()
                 continue
 
             elif "command" in reply.keys():
-                user_cmd_parser_args["user_input"].append(
+                iosxe_chat_args["user_input"].append(
                     {"role": "assistant", "content": str(reply)}
                 )
                 command_resp = handle_command(
-                    user_cmd_parser_args["testbed"],
-                    user_cmd_parser_args["device"],
+                    iosxe_chat_args["testbed"],
+                    iosxe_chat_args["device"],
                     reply["command"],
                 )
 
-                user_cmd_parser_args["user_input"].append(
+                iosxe_chat_args["user_input"].append(
                     {
                         "role": "user",
                         "content": str(command_resp),
                     }
                 )
 
-            reply, token_count = handle_llm_prompt(
-                user_cmd_parser_args["user_input"]
-            )
+            reply, token_count = handle_llm_api(iosxe_chat_args["user_input"])
             if reply == {}:
-                log.error("Received an empty dict from handle_llm_prompt().")
+                log.error("Received an empty dict from handle_llm_api().")
                 continue
 
-            user_cmd_parser_args["total_tokens"] += token_count
+            iosxe_chat_args["total_tokens"] += token_count
             if "answer" in reply.keys():
-                print(f"\n{reply['answer']}\n")
+                print()
+                pydoc.pager(reply["answer"])
+                print()
 
-                user_cmd_parser_args["user_input"].append(
+                iosxe_chat_args["user_input"].append(
                     {
                         "role": "assistant",
                         "content": str(reply),
                     }
                 )
             elif "configure" in reply.keys():
+                print()
                 pydoc.pager("\n".join([line for line in reply["configure"]]))
                 print()
                 if commit_change() is False:
                     print("Discarding changes.\n")
                     continue
 
-                conf_resp = handle_configure(
-                    user_cmd_parser_args["testbed"],
-                    user_cmd_parser_args["device"],
-                    reply["configure"],
+                conf_resp = (
+                    handle_configure(
+                        iosxe_chat_args["testbed"],
+                        iosxe_chat_args["device"],
+                        reply["configure"],
+                    )
+                    or ""
                 )
-                print(f"\n!\n{conf_resp}!\n")
+                print()
+                pydoc.pager(conf_resp)
+                print()
 
         except OpenAIError as e:
             log.error(f"Caught OpenAIError: {e}.")
@@ -332,7 +335,7 @@ def main():
     tb = handle_connect(tb_file)
 
     try:
-        total_tokens = handle_iosxe_chat(tb, prompt_file)
+        total_tokens = iosxe_chat_loop(tb, prompt_file)
         log_total_tokens(total_tokens)
         handle_disconnect(tb)
     except KeyboardInterrupt:
