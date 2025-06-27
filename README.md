@@ -1,84 +1,90 @@
-# IOS-XE Chatbot
+# IOSXE Chatbot
 
-IOS-XE Chatbot is a Python-based interactive CLI assistant that connects a local terminal to a Cisco IOS-XE router or switch using the OpenAI GPT-4o LLM. It enables natural language interaction with the device, translating user queries into IOS-XE commands and configurations.
+IOSXE Chatbot is a terminal-based tool that integrates Cisco's pyATS/Genie testbed automation framework with OpenAI's GPT-4o large language model. It allows network engineers to interact conversationally with Cisco IOS-XE devices via CLI, enabling smart querying, command execution, and automated response parsing using LLM-generated JSON outputs.
 
 ## Features
 
-- Uses OpenAI GPT-4o API to process natural language queries
-- Interfaces with Cisco IOS-XE devices via `pyATS` and `Unicon`
-- Supports context-aware conversations
-- JSON-based response handling (commands, answers, or configurations)
-- Extensible prompt design via markdown template
-- Command menu for interactive use
+- Interactively ask network questions and receive structured JSON responses
+- Automatically run Cisco IOS-XE commands or apply configurations based on LLM decisions
+- Full OpenAI API integration using the `responses` feature with `gpt-4o`
+- Menu-based and prompt-driven input with command handling (`/m`, `/c`, `/p`, `/q`, etc.)
+- Built-in Genie testbed loading and connection management
+- Token usage tracking for cost awareness
+- JSON-formatted output for consistent parsing and automation
 
-## Requirements
+## Installation
 
-Install dependencies using `requirements.txt`:
+1. **Clone the Repository**
+
+```bash
+git clone https://github.com/splitnines/iosxe_chatbot.git
+cd iosxe_chatbot
+```
+
+2. **Set up Python Environment**
+
+We recommend using a virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+3. **Install Dependencies**
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Ensure the following are installed:
-- Python 3.8+
-- Access to Cisco device(s) defined in a `testbed.yaml`
-- OpenAI API Key
+4. **Set OpenAI API Key**
 
-## Files
-
-- `iosxe_chatbot.py`: Main program logic and LLM interface
-- `iosxe_prompt.md`: Developer/system prompt for LLM role definition
-- `testbed.yaml`: PyATS-compatible device connection configuration
-- `requirements.txt`: Dependency list
-- `LICENSE`: Project license
-
-## Usage
-
-1. Export your OpenAI API key:
+Export your OpenAI API key:
 
 ```bash
-export OPENAI_API_KEY="your-api-key"
+export OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-2. Prepare your `testbed.yaml` file in the working directory.
+5. **Prepare Your Testbed**
 
-3. Run the chatbot:
+Place a `testbed.yaml` file in the project root, configured with your Cisco IOS-XE device credentials and connection details.
+
+6. **Run the Chatbot**
 
 ```bash
 python iosxe_chatbot.py
 ```
 
-4. Use the CLI menu for interacting with the assistant:
+## Usage Notes
 
+- Ensure the `iosxe_prompt.md` file is present and contains the system prompt for the LLM.
+- Supported user escape commands:
+  - `/m` — Show menu
+  - `/p` — Show prompt
+  - `/r` — Reload prompt
+  - `/c <command>` — Run a CLI command directly
+  - `/n` — Start new LLM context window
+  - `/q` — Quit session
+
+## Example Interaction
+
+```text
+┌──(0)-[sr1-1]-[IOS-XE Chatbot]
+└─$ What is the IP address of interface GigabitEthernet1?
+
+{"command": ["show ip interface brief"]}
+
+{"answer": "IP address 10.1.100.3 is assigned to interface GigabitEthernet1"}
 ```
-/command - run a command directly on the device
-/menu    - print the menu
-/new     - start a new context window
-/prompt  - print the developer prompt
-/quit    - exit the program
-```
 
-Ask questions about the device like:
+## Acknowledgements
 
-```
-What is the IP address of interface GigabitEthernet1?
-```
-
-The assistant will reply with:
-- JSON command if input is needed from the device
-- JSON answer if an answer can be given
-- JSON configuration to be applied (if appropriate)
-
-## Prompt Design
-
-Responses are expected in valid JSON:
-
-- Command: `{"command": ["show version"]}`
-- Answer: `{"answer": "The device uptime is 5 days."}`
-- Configuration: `{"configure": ["interface Lo1", "ip address 1.1.1.1 255.255.255.0"]}`
-
-See `iosxe_prompt.md` for full schema and examples.
+- **Cisco Systems**: For the powerful [pyATS](https://developer.cisco.com/pyats/) and Genie frameworks.
+- **OpenAI**: For providing access to the GPT-4o model via API.
+- **Open Source Community**: For the Python ecosystem and all packages used in this project.
 
 ## License
 
-See [LICENSE](./LICENSE) for license details.
+This project is licensed under the terms described in the `LICENSE` file.
+
+---
+
