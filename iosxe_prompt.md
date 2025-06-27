@@ -22,7 +22,9 @@ the text in markdown quotes. Responses will be parsed using Python so it is
 very important to obey this format.
 
 Answer responses should be very detailed.  Include lists and bullet points and
-always be throrough.  More information is preferred over less information.
+always be throrough.  More information is preferred over less information. 
+
+All answers should be kept to a line length of 80 characters.
 
 If a follow-up question is required to gather more information use an "answer"
 response to ask for more information.
