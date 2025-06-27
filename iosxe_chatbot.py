@@ -118,54 +118,56 @@ def commit_change():
         return commit_change()
 
 
-def operator_cmds(user_cmd_args):
-    if user_cmd_args["user_input"] == "":
-        return user_cmd_args
+def operator_cmds(operator_cmds_args):
+    if operator_cmds_args["user_input"] == "":
+        return operator_cmds_args
 
     # Start a new context window
-    if user_cmd_args["input_query"].startswith("/n"):
+    if operator_cmds_args["input_query"].startswith("/n"):
         log.info("New context window started.\n")
-        user_cmd_args["user_input"] = [
+        operator_cmds_args["user_input"] = [
             {
                 "role": "developer",
-                "content": user_cmd_args["prompt"],
+                "content": operator_cmds_args["prompt"],
             }
         ]
-        user_cmd_args["context_depth"] = 0
+        operator_cmds_args["context_depth"] = 0
 
     # Display the developer prompt
-    elif user_cmd_args["input_query"].startswith("/p"):
+    elif operator_cmds_args["input_query"].startswith("/p"):
         print()
-        pydoc.pager(user_cmd_args["prompt"])
+        pydoc.pager(operator_cmds_args["prompt"])
         print()
 
     # Display the command menu
-    elif user_cmd_args["input_query"].startswith("/m"):
+    elif operator_cmds_args["input_query"].startswith("/m"):
         menu()
 
     # Reload the developer prompt
-    elif user_cmd_args["input_query"].startswith("/r"):
-        user_cmd_args["prompt"] = developer_input_prompt(
-            user_cmd_args["prompt_file"]
+    elif operator_cmds_args["input_query"].startswith("/r"):
+        operator_cmds_args["prompt"] = developer_input_prompt(
+            operator_cmds_args["prompt_file"]
         )
         log.info("Prompt reloaded.")
         log.info("New context window started.\n")
-        user_cmd_args["user_input"] = [
+        operator_cmds_args["user_input"] = [
             {
                 "role": "developer",
-                "content": user_cmd_args["prompt"],
+                "content": operator_cmds_args["prompt"],
             }
         ]
-        user_cmd_args["context_depth"] = 0
+        operator_cmds_args["context_depth"] = 0
 
     # Send a command to the device directly
-    elif user_cmd_args["input_query"].startswith("/c"):
-        parse_command_re = re.compile(r"^/c[omand\s]+(.+)")
-        match = parse_command_re.search(user_cmd_args["input_query"])
+    elif operator_cmds_args["input_query"].startswith("/c"):
+        parse_command_re = re.compile(r"^/c[omand]+\s*(.+)")
+        match = parse_command_re.search(operator_cmds_args["input_query"])
         if match:
             command = match.group(1)
             command_resp = handle_command(
-                user_cmd_args["testbed"], user_cmd_args["device"], command
+                operator_cmds_args["testbed"],
+                operator_cmds_args["device"],
+                command,
             )
             print()
             pydoc.pager(command_resp)
@@ -174,12 +176,12 @@ def operator_cmds(user_cmd_args):
             log.error("Could not parse the command.\n")
 
     # Quit the program
-    elif user_cmd_args["input_query"].startswith("/q"):
-        log_total_tokens(user_cmd_args["total_tokens"])
-        handle_disconnect(user_cmd_args["testbed"])
+    elif operator_cmds_args["input_query"].startswith("/q"):
+        log_total_tokens(operator_cmds_args["total_tokens"])
+        handle_disconnect(operator_cmds_args["testbed"])
         sys.exit(0)
 
-    return user_cmd_args
+    return operator_cmds_args
 
 
 def operator_prompt(chat_args):
