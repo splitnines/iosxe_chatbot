@@ -81,6 +81,8 @@ python iosxe_chatbot.py
 - **Cisco Systems**: For the powerful [pyATS](https://developer.cisco.com/pyats/) and Genie frameworks.
 - **OpenAI**: For providing access to the GPT-4o model via API.
 - **Open Source Community**: For the Python ecosystem and all packages used in this project.
+- **John Capobianco** [AutomateYourNetwork](https://github.com/automateyournetwork) for sharing his
+work which inspired this project.
 
 ## License
 
