@@ -107,9 +107,10 @@ During interaction, you may use the following slash commands:
 
 ## Acknowledgements
 
-- **Cisco Systems, Inc.** for [pyATS](https://developer.cisco.com/pyats/) and [Genie](https://developer.cisco.com/genie-docs/)
 - **Open Source Community** for Python and the rich ecosystem of libraries
-- **OpenAI** for enabling LLM integration via the [OpenAI Python SDK](https://pypi.org/project/openai/)
+- **John Capobianco**
+[AutomateYourNetwork](https://github.com/automateyournetwork) for sharing his
+work and inspiring this project.
 
 ## License
 
