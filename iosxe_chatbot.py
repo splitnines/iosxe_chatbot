@@ -1,3 +1,6 @@
+from httpx import ReadTimeout
+from lib.menu import menu
+from openai import OpenAI, OpenAIError
 import json
 import logging
 import os
@@ -5,14 +8,14 @@ import platform
 import pydoc
 import re
 import sys
-from genie.testbed import load
-from unicon.core.errors import (
-    ConnectionError,
-    SubCommandFailure,
-    CredentialsExhaustedError,
+from socket import error as s_error
+from netmiko import ConnectHandler
+from netmiko.exceptions import (
+    NetMikoTimeoutException,
+    NetMikoAuthenticationException,
+    ConfigInvalidException,
+    ConnectionException,
 )
-from openai import OpenAI, OpenAIError
-from lib.menu import menu
 
 
 log = logging.getLogger(__name__)
@@ -27,50 +30,208 @@ logging.basicConfig(
 os.environ["PAGER"] = "more"
 
 
-def handle_connect(tb_file):
-    try:
-        log.info(f'Loading testbed file "{tb_file}".')
-        tb = load(tb_file)
-        log.info("Connecting to testbed.")
-        tb.connect(log_stdout=False, logfile=False)
-        log.info("Successfully connected to testbed")
-
-        return tb
-
-    except CredentialsExhaustedError as e:
-        log.error(f"Login failed: {e}")
+def handle_command_line_args():
+    usage = "python iosxe_chatbot.py <device IP/name"
+    if len(sys.argv) != 2:
+        print(usage, file=sys.stderr)
         sys.exit(1)
-    except ConnectionError as e:
-        log.error(f"Failed to connect: {e}")
+
+    return sys.argv[1]
+
+
+def clear_screen():
+    if platform.system() == "Windows":
+        os.system("cls")
+    else:
+        os.system("clear")
+
+
+def developer_input_prompt(filename):
+    with open(filename, "r") as f:
+        prompt = f.read()
+    return prompt
+
+
+def ios_prompt(conn):
+    return conn.find_prompt()
+
+
+def log_total_tokens(total_tokens):
+    print()
+    log.info(f"Total tokens consumed for the session {total_tokens}")
+
+
+def commit_change():
+    operator_permission = input("Commit changes [y/n]: ")
+    if operator_permission.lower() == "y":
+        return True
+    elif operator_permission.lower() == "n":
+        return False
+    else:
+        return commit_change()
+
+
+def operator_prompt(operator_prompt_params):
+    prompt = f"┌──({operator_prompt_params['context_depth']})-[IOS-XE Chatbot]"
+    device_prompt = ios_prompt(operator_prompt_params["conn"])
+    print(prompt)
+    operator_input = input(f"└─ {device_prompt} ")
+
+    return operator_input
+
+
+def handle_connect(device_params):
+    """
+    Establishes a connection to a network device using the provided device
+    parameters.
+
+    Parameters: device_params (dict): A dictionary containing the following
+    keys:
+        - host (str): The hostname or IP address of the device.
+        - username (str): The username for authentication.
+        - password (str): The password for authentication.
+
+    Returns: ConnectHandler: A connection object representing the connection to
+    the device.
+
+    Raises:
+    NetMikoAuthenticationException: If authentication fails for the device.
+    ConnectionException: If a general connection exception occurs.
+    NetMikoTimeoutException: If a timeout occurs during the connection attempt.
+    Exception: For any other unhandled exceptions that may occur.
+
+    Example:
+    device_params = {
+        "host": "192.168.1.1",
+        "username": "admin",
+        "password": "password123"
+    }
+    connection = handle_connect(device_params)
+    """
+
+    try:
+        conn = ConnectHandler(
+            host=device_params["host"],
+            port=22,
+            username=device_params["username"],
+            password=device_params["password"],
+            device_type="cisco_ios",
+            timeout=10,
+        )
+
+        return conn
+
+    except NetMikoAuthenticationException as e:
+        log.error(f"Authentication failed for {device_params['host']}: {e}")
+        sys.exit(1)
+    except ConnectionException as e:
+        log.error(f"ConnectionException for {device_params['host']}: {e}")
+        sys.exit(1)
+    except NetMikoTimeoutException as e:
+        log.error(f"TimeoutException for {device_params['host']}: {e}")
         sys.exit(1)
     except Exception as e:
-        log.error(f"Caught exception {e}")
+        log.error(
+            "Unhandled exception during connection for "
+            f"{device_params['host']}: {e}"
+        )
         sys.exit(1)
 
 
-def handle_command(tb, dev, command):
-    resp = tb.devices[dev].execute(command)
+def handle_command(conn, command):
+    """
+    This function sends a command to a connection object and returns the
+    response.
+
+    Parameters:
+    conn (connection object): The connection object to send the command to.
+    command (str): The command to send.
+
+    Returns:
+    str: The response from the connection object after sending the command.
+
+    Raises:
+    None
+
+    Example:
+    >>> handle_command(conn, "show interfaces")
+    'GigabitEthernet0/0 is up, line protocol is up'
+    """
+
+    expect_re = re.compile(r"[#?>]\s*$|\]\s*$|:\s*$|\[confirm\]$")
+    resp = conn.send_command_expect(
+        command_string=command,
+        expect_string=expect_re,
+        strip_prompt=True,
+        strip_command=True,
+    )
+
     return resp
 
 
-def handle_configure(tb, dev, conf_list):
+def handle_configure(conn, conf_list):
+    """
+    Configure a network device using a list of configuration commands.
+
+    Parameters:
+    conn (connection): A connection object to the network device.
+    conf_list (list): A list of configuration commands to be sent to the
+                      device.
+
+    Returns:
+    str: Response from the device after sending the configuration commands.
+
+    Raises:
+    ConfigInvalidException: If the configuration provided is invalid.
+    Exception: If any other error occurs during the configuration process.
+    """
     try:
-        resp = tb.devices[dev].configure(conf_list)
-        log.info(f"Device {dev} configured successully.")
+        resp = conn.send_config_set(conf_list)
+        log.info("Configuration successully.")
         return resp
-    except SubCommandFailure as e:
-        log.error(f"Device {dev} configuration failed: {e}")
+    except ConfigInvalidException as e:
+        log.error(f"ConfigInvalidException: {e}")
     except Exception as e:
-        log.error(f"Caught generic exception: {e}")
+        log.error(f"Unhandled exception in handle_configure(): {e}")
 
 
-def handle_disconnect(tb):
-    log.info("Disconnecting from testbed, please wait.")
-    tb.disconnect()
-    log.info("Successfully disconnected from testbed.")
+def handle_disconnect(conn, host):
+    """
+    Handles the disconnection of a connection to a host.
+
+    Parameters:
+    conn (Connection): The connection object to be disconnected.
+    host (str): The hostname or IP address of the host being disconnected from.
+
+    Returns:
+    None
+
+    Raises:
+    None
+    """
+    conn.disconnect()
+    log.info(f"Connection to {host} closed.")
 
 
 def handle_llm_api(user_input):
+    """
+    Calls the OpenAI API with the given user input and returns the response
+    along with the total number of tokens used.
+
+    Parameters:
+    user_input (str): The input text to be sent to the OpenAI API.
+
+    Returns:
+    tuple: A tuple containing a dictionary representing the response from the
+    OpenAI API and an integer representing the total number of tokens used.
+
+    Raises:
+    OpenAIError: If an error occurs while calling the OpenAI API.
+    Exception: If any other unexpected error occurs.
+
+    Example:
+    handle_llm_api("Hello, how are you?")
+    """
     try:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.responses.create(
@@ -90,85 +251,92 @@ def handle_llm_api(user_input):
             return reply, total_tokens
 
     except OpenAIError as e:
-        log.error(f"Caught OpenAIError: {e}")
+        log.error(f"OpenAIError: {e}")
     except Exception as e:
-        log.error(f"Caught exception: {e}")
+        log.error(f"Unhandled exception in handle_llm_api(): {e}")
 
     return {}, 0
 
 
-def developer_input_prompt(filename):
-    with open(filename, "r") as f:
-        prompt = f.read()
-    return prompt
+def operator_cmds(operator_cmd_params):
+    """
+    Process operator commands based on user input.
 
+    Parameters:
+    operator_cmd_params (dict): A dictionary containing various parameters like
+    user input, input query, prompt, context depth, etc.
 
-def log_total_tokens(total_tokens):
-    print()
-    log.info(f"Total tokens consumed for the session {total_tokens}")
+    Returns:
+    dict: Updated operator command parameters after processing the user input.
 
+    Raises:
+    ValueError: If the input query does not match any known command.
 
-def commit_change():
-    operator_permission = input("Commit changes [y/n]: ")
-    if operator_permission.lower() == "y":
-        return True
-    elif operator_permission.lower() == "n":
-        return False
-    else:
-        return commit_change()
+    This function processes different operator commands based on the user input
+    provided. It checks the input query and performs specific actions
+    accordingly.
 
+    Supported operator commands:
+    - /n: Start a new context window
+    - /p: Display the developer prompt
+    - /m: Display the command menu
+    - /r: Reload the developer prompt
+    - /c: Send a command to the device directly
+    - /q: Quit the program
 
-def operator_cmds(operator_cmds_args):
-    if operator_cmds_args["user_input"] == "":
-        return operator_cmds_args
+    If the input query does not match any of the supported commands, a
+    ValueError is raised.
+
+    The function returns the updated operator command parameters after
+    processing the user input.
+    """
+    if operator_cmd_params["user_input"] == "":
+        return operator_cmd_params
 
     # Start a new context window
-    if operator_cmds_args["input_query"].startswith("/n"):
+    if operator_cmd_params["input_query"].startswith("/n"):
         log.info("New context window started.\n")
-        operator_cmds_args["user_input"] = [
+        operator_cmd_params["user_input"] = [
             {
                 "role": "developer",
-                "content": operator_cmds_args["prompt"],
+                "content": operator_cmd_params["prompt"],
             }
         ]
-        operator_cmds_args["context_depth"] = 0
+        operator_cmd_params["context_depth"] = 0
 
     # Display the developer prompt
-    elif operator_cmds_args["input_query"].startswith("/p"):
+    elif operator_cmd_params["input_query"].startswith("/p"):
         print()
-        pydoc.pager(operator_cmds_args["prompt"])
+        pydoc.pager(operator_cmd_params["prompt"])
         print()
 
     # Display the command menu
-    elif operator_cmds_args["input_query"].startswith("/m"):
+    elif operator_cmd_params["input_query"].startswith("/m"):
         menu()
 
     # Reload the developer prompt
-    elif operator_cmds_args["input_query"].startswith("/r"):
-        operator_cmds_args["prompt"] = developer_input_prompt(
-            operator_cmds_args["prompt_file"]
+    elif operator_cmd_params["input_query"].startswith("/r"):
+        operator_cmd_params["prompt"] = developer_input_prompt(
+            operator_cmd_params["prompt_file"]
         )
         log.info("Prompt reloaded.")
         log.info("New context window started.\n")
-        operator_cmds_args["user_input"] = [
+        operator_cmd_params["user_input"] = [
             {
                 "role": "developer",
-                "content": operator_cmds_args["prompt"],
+                "content": operator_cmd_params["prompt"],
             }
         ]
-        operator_cmds_args["context_depth"] = 0
+        operator_cmd_params["context_depth"] = 0
 
     # Send a command to the device directly
-    elif operator_cmds_args["input_query"].startswith("/c"):
-        parse_command_re = re.compile(r"^/c[omand]+\s*(.+)")
-        match = parse_command_re.search(operator_cmds_args["input_query"])
-        if match:
+    elif operator_cmd_params["input_query"].startswith("/c"):
+        parse_command_re = re.compile(r"^/c[omand]*\s+(.+)")
+        if match := parse_command_re.search(
+            operator_cmd_params["input_query"]
+        ):
             command = match.group(1)
-            command_resp = handle_command(
-                operator_cmds_args["testbed"],
-                operator_cmds_args["device"],
-                command,
-            )
+            command_resp = handle_command(operator_cmd_params["conn"], command)
             print()
             pydoc.pager(command_resp)
             print()
@@ -176,33 +344,43 @@ def operator_cmds(operator_cmds_args):
             log.error("Could not parse the command.\n")
 
     # Quit the program
-    elif operator_cmds_args["input_query"].startswith("/q"):
-        log_total_tokens(operator_cmds_args["total_tokens"])
-        handle_disconnect(operator_cmds_args["testbed"])
+    elif operator_cmd_params["input_query"].startswith("/q"):
+        log_total_tokens(operator_cmd_params["total_tokens"])
+        handle_disconnect(
+            operator_cmd_params["conn"], operator_cmd_params["host"]
+        )
         sys.exit(0)
 
-    return operator_cmds_args
+    return operator_cmd_params
 
 
-def operator_prompt(chat_args):
-    prompt = (
-        f"┌──({chat_args['context_depth']})-"
-        f"[{chat_args['device']}]-"
-        "[IOS-XE Chatbot]"
-    )
-    print(prompt)
-    operator_input = input("└─$ ")
+def iosxe_chat_loop(conn, host, prompt_file):
+    """
+    Function to initiate a chat loop with an IOSXE device.
 
-    return operator_input
+    Parameters:
+    - conn: SSH connection object to the device
+    - host: IP address or hostname of the device
+    - prompt_file: File containing prompts for the chat loop
 
+    Returns:
+    - None
 
-# LLM responses are in JSON format. Example:
-# {"type": "response"}
-# There are 3 types: command, answer and configure
-def iosxe_chat_loop(tb, prompt_file):
-    iosxe_chat_args = {
-        "testbed": tb,
-        "device": "sr1-1",
+    Raises:
+    - OpenAIError: If there is an error with the OpenAI API
+    - JSONDecodeError: If there is an error decoding JSON data
+    - ConnectionException: If there is an issue with the SSH connection
+    - socket.error: If there is a socket error
+    - Exception: For any other unhandled exceptions
+
+    This function sets up a chat loop with an IOSXE device using the provided
+    SSH connection object and prompts from a file. It prompts the user for
+    input, processes the input, and interacts with the device accordingly. The
+    loop continues until an error occurs or the user decides to exit.
+    """
+    iosxe_chat_loop_params = {
+        "conn": conn,
+        "host": host,
         "context_depth": 0,
         "prompt_file": prompt_file,
         "total_tokens": 0,
@@ -213,40 +391,45 @@ def iosxe_chat_loop(tb, prompt_file):
 
     menu()
 
-    iosxe_chat_args["user_input"] = [
-        {"role": "developer", "content": iosxe_chat_args["prompt"]}
+    iosxe_chat_loop_params["user_input"] = [
+        {"role": "developer", "content": iosxe_chat_loop_params["prompt"]}
     ]
     while True:
         try:
-            iosxe_chat_args["input_query"] = operator_prompt(iosxe_chat_args)
+            iosxe_chat_loop_params["input_query"] = operator_prompt(
+                iosxe_chat_loop_params
+            )
             print()
 
             # parse the escaped commands from the user
             if (
-                iosxe_chat_args["input_query"].startswith("/")
-                or iosxe_chat_args["input_query"] == ""
+                iosxe_chat_loop_params["input_query"].startswith("/")
+                or iosxe_chat_loop_params["input_query"] == ""
             ):
-                iosxe_chat_args = operator_cmds(iosxe_chat_args)
+                iosxe_chat_loop_params = operator_cmds(iosxe_chat_loop_params)
                 continue
 
             #
-            iosxe_chat_args["user_input"].append(
+            iosxe_chat_loop_params["user_input"].append(
                 {
                     "role": "user",
-                    "content": iosxe_chat_args["input_query"],
+                    "content": iosxe_chat_loop_params["input_query"],
                 }
             )
 
-            iosxe_chat_args["context_depth"] += 1
+            iosxe_chat_loop_params["context_depth"] += 1
 
-            reply, token_count = handle_llm_api(iosxe_chat_args["user_input"])
+            reply, token_count = handle_llm_api(
+                iosxe_chat_loop_params["user_input"]
+            )
             if reply == {}:
                 log.error("Received an empty dict from handle_llm_api().")
                 continue
 
-            iosxe_chat_args["total_tokens"] += token_count
+            iosxe_chat_loop_params["total_tokens"] += token_count
+
             if "answer" in reply.keys():
-                iosxe_chat_args["user_input"].append(
+                iosxe_chat_loop_params["user_input"].append(
                     {"role": "assistant", "content": str(reply)}
                 )
                 pydoc.pager(reply["answer"])
@@ -254,34 +437,37 @@ def iosxe_chat_loop(tb, prompt_file):
                 continue
 
             elif "command" in reply.keys():
-                iosxe_chat_args["user_input"].append(
+                iosxe_chat_loop_params["user_input"].append(
                     {"role": "assistant", "content": str(reply)}
                 )
-                command_resp = handle_command(
-                    iosxe_chat_args["testbed"],
-                    iosxe_chat_args["device"],
-                    reply["command"],
-                )
 
-                iosxe_chat_args["user_input"].append(
+                command_resp = ""
+                for command in reply["command"]:
+                    command_resp += handle_command(
+                        iosxe_chat_loop_params["conn"], command
+                    )
+
+                iosxe_chat_loop_params["user_input"].append(
                     {
                         "role": "user",
                         "content": str(command_resp),
                     }
                 )
 
-            reply, token_count = handle_llm_api(iosxe_chat_args["user_input"])
+            reply, token_count = handle_llm_api(
+                iosxe_chat_loop_params["user_input"]
+            )
             if reply == {}:
                 log.error("Received an empty dict from handle_llm_api().")
                 continue
 
-            iosxe_chat_args["total_tokens"] += token_count
+            iosxe_chat_loop_params["total_tokens"] += token_count
             if "answer" in reply.keys():
                 print()
                 pydoc.pager(reply["answer"])
                 print()
 
-                iosxe_chat_args["user_input"].append(
+                iosxe_chat_loop_params["user_input"].append(
                     {
                         "role": "assistant",
                         "content": str(reply),
@@ -297,8 +483,7 @@ def iosxe_chat_loop(tb, prompt_file):
 
                 conf_resp = (
                     handle_configure(
-                        iosxe_chat_args["testbed"],
-                        iosxe_chat_args["device"],
+                        iosxe_chat_loop_params["conn"],
                         reply["configure"],
                     )
                     or ""
@@ -311,38 +496,40 @@ def iosxe_chat_loop(tb, prompt_file):
             log.error(f"Caught OpenAIError: {e}.")
         except (json.JSONDecodeError, json.decoder.JSONDecodeError) as e:
             log.error(f"Caught JSONDecodeError: {e}")
+        except ConnectionException as e:
+            log.error(f"ConnectionException in iosxe_chat_loop(): {e}")
+            sys.exit(1)
+        except s_error as e:
+            log.error(f"socket.error in iosxe_chat_loop(): {e}")
+            sys.exit(1)
         except Exception as e:
-            log.error(f"Caught exception: {e}")
-
-
-def clear_screen():
-    if platform.system() == "Windows":
-        os.system("cls")
-    else:
-        os.system("clear")
+            log.error(f"Unhandled exception in iosxe_chat_loop(): {e}")
 
 
 def main():
+    main_params = {
+        # get the host from the user cli args
+        "host": handle_command_line_args(),
+        "username": os.environ["TESTBED_USERNAME"],
+        "password": os.environ["TESTBED_PASSWORD"],
+    }
+
     clear_screen()
-    tb_file = "testbed.yaml"
-    if not os.path.exists(tb_file):
-        log.error(f"File {tb_file} does not exist.")
-        sys.exit(1)
 
     prompt_file = "iosxe_prompt.md"
     if not os.path.exists(prompt_file):
         log.error(f"File {prompt_file} does not exist.")
         sys.exit(1)
 
-    tb = handle_connect(tb_file)
+    conn = handle_connect(main_params)
 
     try:
-        total_tokens = iosxe_chat_loop(tb, prompt_file)
+        total_tokens = iosxe_chat_loop(conn, main_params["host"], prompt_file)
         log_total_tokens(total_tokens)
-        handle_disconnect(tb)
+        handle_disconnect(conn, main_params["host"])
     except KeyboardInterrupt:
         log.warning("KeyboardInterrupt....exiting.")
-        handle_disconnect(tb)
+        handle_disconnect(conn, main_params["host"])
     except Exception as e:
         log.error(f"Exception caught in main(): {e}")
 

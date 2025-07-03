@@ -11,4 +11,6 @@ wheels/
 
 #
 openai_resp.py
+iosxe_chatbot.py.pyats
 testbed2.yaml
+testbed.yaml
