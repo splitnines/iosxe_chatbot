@@ -11,11 +11,12 @@ def menu():
 
         Operator Command Menu:
 
-        /command - run a command directly on the device
-        /menu    - print this menu
-        /new     - start a new context window
-        /prompt  - print the developer prompt
-        /quit    - quit the program
+        /c  - run a command directly on the device
+        /m  - print this menu
+        /n  - start a new context window
+        /p  - print the developer prompt
+        /r  - reload the developer prompt
+        /q  - quit the program1
 
 
         To interact with the LMM just type you query.
