@@ -13,3 +13,6 @@ dependencies = [
 
 [tool.ruff]
 line-length = 79
+
+[tool.ruff.mccabe]
+max-complexity = 25

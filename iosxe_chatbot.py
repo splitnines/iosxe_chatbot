@@ -1,4 +1,4 @@
-import json
+import ast
 import os
 import platform
 import pydoc
@@ -18,6 +18,8 @@ from netmiko.exceptions import (
     ConnectionException,
 )
 
+# suppress the linter warning for importing without use
+_ = readline
 
 # set the logging
 log = logger("info")
@@ -26,6 +28,7 @@ log = logger("info")
 os.environ["PAGER"] = "more"
 
 
+# allows the use of the arrow keys for navigating the command line/history
 def readline_input(prompt=""):
     try:
         return input(prompt)
@@ -102,16 +105,7 @@ def handle_connect(device_params):
     ConnectionException: If a general connection exception occurs.
     NetMikoTimeoutException: If a timeout occurs during the connection attempt.
     Exception: For any other unhandled exceptions that may occur.
-
-    Example:
-    device_params = {
-        "host": "192.168.1.1",
-        "username": "admin",
-        "password": "password123"
-    }
-    connection = handle_connect(device_params)
     """
-
     try:
         conn = ConnectHandler(
             host=device_params["host"],
@@ -146,14 +140,11 @@ def handle_command(conn, command):
     Sends a command to a connection object and returns the response.
 
     Parameters:
-    conn (Connection): A connection object to send the command to.
+    conn (ConnectHandler): A connection object to send the command to.
     command (str): The command to be sent.
 
     Returns:
     str: The response received after sending the command.
-
-    Raises:
-    ValueError: If the command does not end with a question mark ('?').
 
     This function first checks if the command ends with a question mark ('?').
     If it does, it sends the command to the connection object and returns the
@@ -188,7 +179,7 @@ def handle_configure(conn, conf_list):
     Configure a network device using a list of configuration commands.
 
     Parameters:
-    conn (connection): A connection object to the network device.
+    conn (ConnectHandler): A connection object to the network device.
     conf_list (list): A list of configuration commands to be sent to the
                       device.
 
@@ -242,9 +233,6 @@ def handle_llm_api(user_input):
     Raises:
     OpenAIError: If an error occurs while calling the OpenAI API.
     Exception: If any other unexpected error occurs.
-
-    Example:
-    handle_llm_api("Hello, how are you?")
     """
     try:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -260,12 +248,16 @@ def handle_llm_api(user_input):
 
             log.info(f"Reply from the LLM API: {response.output_text}")
 
-            reply = json.loads(response.output_text)
+            reply = ast.literal_eval(response.output_text)
 
             return reply, total_tokens
 
     except OpenAIError as e:
         log.error(f"OpenAIError: {e}")
+    except ValueError as e:
+        log.error(f"ValueError in handle_llm_api(): {e}")
+    except SyntaxError as e:
+        log.error(f"SyntaxError in handle_llm_api(): {e}")
     except Exception as e:
         log.error(f"Unhandled exception in handle_llm_api(): {e}")
 
@@ -283,9 +275,6 @@ def operator_cmds(operator_cmd_params):
     Returns:
     dict: Updated operator command parameters after processing the user input.
 
-    Raises:
-    ValueError: If the input query does not match any known command.
-
     This function processes different operator commands based on the user input
     provided. It checks the input query and performs specific actions
     accordingly.
@@ -297,9 +286,6 @@ def operator_cmds(operator_cmd_params):
     - /r: Reload the developer prompt
     - /c: Send a command to the device directly
     - /q: Quit the program
-
-    If the input query does not match any of the supported commands, a
-    ValueError is raised.
 
     The function returns the updated operator command parameters after
     processing the user input.
@@ -389,7 +375,7 @@ def iosxe_chat_loop(conn, host, prompt_file):
     This function sets up a chat loop with an IOSXE device using the provided
     SSH connection object and prompts from a file. It prompts the user for
     input, processes the input, and interacts with the device accordingly. The
-    loop continues until an error occurs or the user decides to exit.
+    loop continues until the user decides to exit.
     """
     iosxe_chat_loop_params = {
         "conn": conn,
@@ -508,8 +494,6 @@ def iosxe_chat_loop(conn, host, prompt_file):
 
         except OpenAIError as e:
             log.error(f"Caught OpenAIError: {e}.")
-        except (json.JSONDecodeError, json.decoder.JSONDecodeError) as e:
-            log.error(f"Caught JSONDecodeError: {e}")
         except ConnectionException as e:
             log.error(f"ConnectionException in iosxe_chat_loop(): {e}")
             sys.exit(1)
