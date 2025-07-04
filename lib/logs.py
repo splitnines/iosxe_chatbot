@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from datetime import datetime as dt
 
@@ -7,6 +8,9 @@ DAY = dt.today().strftime("%m%d%Y")
 
 
 def logger(log_level="info"):
+    if not os.path.exists("logs"):
+        os.mkdir("logs")
+
     LOG_LEVELS = {
         "debug": logging.DEBUG,
         "info": logging.INFO,
