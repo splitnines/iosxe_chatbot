@@ -1,13 +1,13 @@
-from httpx import ReadTimeout
-from lib.menu import menu
-from openai import OpenAI, OpenAIError
 import json
-import logging
 import os
 import platform
 import pydoc
 import re
 import sys
+from time import sleep
+from lib.menu import menu
+from lib.logs import logger
+from openai import OpenAI, OpenAIError
 from socket import error as s_error
 from netmiko import ConnectHandler
 from netmiko.exceptions import (
@@ -18,13 +18,8 @@ from netmiko.exceptions import (
 )
 
 
-log = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO,
-    format="\033[90m%(asctime)s: %(levelname)s: %(message)s\033[0m",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    # filename="basic.log",
-)
+# set the logging
+log = logger("info")
 
 # set the pager to be used
 os.environ["PAGER"] = "more"
@@ -157,9 +152,14 @@ def handle_command(conn, command):
     >>> handle_command(conn, "show interfaces")
     'GigabitEthernet0/0 is up, line protocol is up'
     """
+    if re.search(r".+\?$", command):
+        conn.write_channel(command + "\n")
+        sleep(0.1)
+        resp = conn.read_channel()
+        return resp.replace(command, "")
 
-    expect_re = re.compile(r"[#?>]\s*$|\]\s*$|:\s*$|\[confirm\]$")
-    resp = conn.send_command_expect(
+    expect_re = re.compile(r"[#>?]\s*$")
+    resp = conn.send_command(
         command_string=command,
         expect_string=expect_re,
         strip_prompt=True,
@@ -331,13 +331,12 @@ def operator_cmds(operator_cmd_params):
 
     # Send a command to the device directly
     elif operator_cmd_params["input_query"].startswith("/c"):
-        parse_command_re = re.compile(r"^/c[omand]*\s+(.+)")
+        parse_command_re = re.compile(r"^/c\s+(.+)")
         if match := parse_command_re.search(
             operator_cmd_params["input_query"]
         ):
             command = match.group(1)
             command_resp = handle_command(operator_cmd_params["conn"], command)
-            print()
             pydoc.pager(command_resp)
             print()
         else:
@@ -409,7 +408,8 @@ def iosxe_chat_loop(conn, host, prompt_file):
                 iosxe_chat_loop_params = operator_cmds(iosxe_chat_loop_params)
                 continue
 
-            #
+            log.info(f"Query to LLM: {iosxe_chat_loop_params['input_query']}")
+
             iosxe_chat_loop_params["user_input"].append(
                 {
                     "role": "user",
@@ -507,14 +507,14 @@ def iosxe_chat_loop(conn, host, prompt_file):
 
 
 def main():
+    clear_screen()
+
     main_params = {
         # get the host from the user cli args
         "host": handle_command_line_args(),
         "username": os.environ["TESTBED_USERNAME"],
         "password": os.environ["TESTBED_PASSWORD"],
     }
-
-    clear_screen()
 
     prompt_file = "iosxe_prompt.md"
     if not os.path.exists(prompt_file):
