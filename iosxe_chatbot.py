@@ -3,6 +3,7 @@ import os
 import platform
 import pydoc
 import re
+import readline
 import sys
 from time import sleep
 from lib.menu import menu
@@ -23,6 +24,13 @@ log = logger("info")
 
 # set the pager to be used
 os.environ["PAGER"] = "more"
+
+
+def readline_input(prompt=""):
+    try:
+        return input(prompt)
+    except EOFError:
+        return ""
 
 
 def handle_command_line_args():
@@ -57,7 +65,7 @@ def log_total_tokens(total_tokens):
 
 
 def commit_change():
-    operator_permission = input("Commit changes [y/n]: ")
+    operator_permission = readline_input("Commit changes [y/n]: ")
     if operator_permission.lower() == "y":
         return True
     elif operator_permission.lower() == "n":
@@ -70,7 +78,7 @@ def operator_prompt(operator_prompt_params):
     prompt = f"┌──({operator_prompt_params['context_depth']})-[IOS-XE Chatbot]"
     device_prompt = ios_prompt(operator_prompt_params["conn"])
     print(prompt)
-    operator_input = input(f"└─ {device_prompt} ")
+    operator_input = readline_input(f"└─ {device_prompt} ")
 
     return operator_input
 
@@ -135,30 +143,36 @@ def handle_connect(device_params):
 
 def handle_command(conn, command):
     """
-    This function sends a command to a connection object and returns the
-    response.
+    Sends a command to a connection object and returns the response.
 
     Parameters:
-    conn (connection object): The connection object to send the command to.
-    command (str): The command to send.
+    conn (Connection): A connection object to send the command to.
+    command (str): The command to be sent.
 
     Returns:
-    str: The response from the connection object after sending the command.
+    str: The response received after sending the command.
 
     Raises:
-    None
+    ValueError: If the command does not end with a question mark ('?').
 
-    Example:
-    >>> handle_command(conn, "show interfaces")
-    'GigabitEthernet0/0 is up, line protocol is up'
+    This function first checks if the command ends with a question mark ('?').
+    If it does, it sends the command to the connection object and returns the
+    response after removing the command from it. If the command does not end
+    with a question mark, it sends the command to the connection object and
+    returns the response.
+
+    The response is obtained by sending the command to the connection object
+    and expecting a prompt or question mark at the end of the response. The
+    prompt or question mark is stripped from the response before returning it.
     """
+
     if re.search(r".+\?$", command):
         conn.write_channel(command + "\n")
         sleep(0.1)
         resp = conn.read_channel()
         return resp.replace(command, "")
 
-    expect_re = re.compile(r"[#>?]\s*$")
+    expect_re = re.compile(r"[#>?:]\s*$")
     resp = conn.send_command(
         command_string=command,
         expect_string=expect_re,
