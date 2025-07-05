@@ -30,6 +30,46 @@ os.environ["PAGER"] = "more"
 
 # allows the use of the arrow keys for navigating the command line/history
 def readline_input(prompt=""):
+    """
+    Reads a line of input from the user, displaying an optional prompt.
+
+    This function wraps the built-in `input` function to safely handle
+    `EOFError` exceptions, which can occur if the input stream is closed
+    unexpectedly (e.g., when the user sends an EOF signal like Ctrl-D on Unix
+    or Ctrl-Z on Windows). In such cases, the function returns an empty string
+    instead of raising an exception, allowing the program to continue running
+    smoothly.
+
+    Parameters:
+    ----------
+    prompt : str, optional
+        A string to be displayed as a prompt to the user. Defaults to an empty
+        string, meaning no prompt will be shown if not specified.
+
+    Returns:
+    -------
+    str
+        The line of input entered by the user, or an empty string if an
+        `EOFError` is encountered.
+
+    Examples:
+    --------
+    >>> name = readline_input("Enter your name: ")
+    Enter your name: John
+    >>> print(name)
+    John
+
+    >>> # Simulating EOFError by sending EOF signal
+    >>> readline_input("Enter something: ")
+    Enter something:
+    ''
+
+    Notes:
+    -----
+    This function is particularly useful in interactive scripts where user
+    input is required, and it is important to handle unexpected EOF signals
+    gracefully.
+    """
     try:
         return input(prompt)
     except EOFError:
