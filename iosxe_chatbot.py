@@ -22,6 +22,7 @@ from socket import error as s_error
 from time import sleep
 
 # ----------------------------------------------------------------------------#
+#
 # suppress the linter warning for importing without use
 _ = readline
 
@@ -32,8 +33,6 @@ log = logger("info")
 os.environ["PAGER"] = "more"
 
 # define the console setting for markdown formatting
-buffer = StringIO()
-console = Console(file=buffer, width=80)
 
 
 # allows the use of the arrow keys for navigating the command line/history
@@ -511,7 +510,7 @@ def operator_cmds(operator_cmd_params):
         ):
             command = match.group(1)
             command_resp = handle_command(operator_cmd_params["conn"], command)
-            pydoc.pager(command_resp)
+            pydoc.pager(str(command_resp))
             print()
         else:
             log.error("Could not parse the command.\n")
@@ -530,48 +529,28 @@ def operator_cmds(operator_cmd_params):
 def iosxe_chat_loop(conn, host, prompt_file):
     """
     Initiates and manages an interactive chat loop with an IOS-XE device using
-    a language model.
+    a language model for processing and responding to user inputs.
 
-    This function facilitates a continuous interaction between a user and an
-    IOS-XE device by leveraging a language model to interpret user inputs and
-    generate appropriate responses or commands. The function handles various
-    types of user inputs, including direct commands and queries, and processes
-    them accordingly. It also manages the context of the conversation, ensuring
-    that the interaction remains coherent and contextually relevant.
+    This function sets up a continuous loop where user inputs are processed
+    and responded to by a language model. It handles various types of responses
+    such as commands, answers, and configuration changes, and manages the
+    interaction with the IOS-XE device accordingly.
 
-    Parameters: ----------- conn : object A connection object that represents
-    the session with the IOS-XE device. This object is used to send commands
-    and receive responses from the device. host : str The hostname or IP
-    address of the IOS-XE device. This is used for logging and tracking
-    purposes. prompt_file : str The path to a file containing the initial
-    prompt or context for the language model. This file is used to initialize
-    the conversation and provide context for the language model's responses.
+    Parameters:
+    conn (object): The connection object to the IOS-XE device.
+    host (str): The hostname or IP address of the IOS-XE device.
+    prompt_file (str): The file path to the prompt file used for initializing
+                       the chat context.
 
-    Raises: ------- OpenAIError If an error occurs while interacting with the
-    language model API. ConnectionException If there is a failure in the
-    connection to the IOS-XE device. socket.error If a socket-related error
-    occurs during the operation. Exception For any other unhandled exceptions
-    that may arise during the execution of the function.
+    Raises:
+    OpenAIError: If an error occurs while interacting with the language model API.
+    ConnectionException: If there is a connection issue with the IOS-XE device.
+    socket.error: If a socket error occurs during the operation.
+    Exception: For any other unhandled exceptions that may arise.
 
-    Notes: ------
-    - The function maintains a loop that continuously prompts the user for
-      input, processes the input, and generates responses using a language
-      model.
-    - The function supports special commands prefixed with '/' that allow users
-      to perform specific operations or modify the behavior of the chat loop.
-    - The function logs all interactions and errors for auditing and debugging
-      purposes.
-    - The function uses a context depth counter to manage the depth of the
-      conversation and ensure that the language model has sufficient context to
-      generate meaningful responses.
-    - The function handles both 'answer' and 'command' types of responses from
-      the language model, executing commands on the IOS-XE device as needed and
-      displaying the results to the user.
-    - The function also supports configuration changes on the IOS-XE device,
-      prompting the user to commit or discard changes as necessary.
-
-    Example: -------- >>> iosxe_chat_loop(conn, '192.168.1.1',
-    'initial_prompt.txt')
+    Note:
+    The function will continue to run indefinitely until manually stopped or
+    an unhandled exception causes it to exit.
     """
     iosxe_chat_loop_params = {
         "conn": conn,
@@ -591,12 +570,13 @@ def iosxe_chat_loop(conn, host, prompt_file):
     ]
     while True:
         try:
+            # prompt the operator
             iosxe_chat_loop_params["input_query"] = operator_prompt(
                 iosxe_chat_loop_params
             )
             print()
 
-            # parse the escaped commands from the user
+            # parse the escaped commands from the operator
             if (
                 iosxe_chat_loop_params["input_query"].startswith("/")
                 or iosxe_chat_loop_params["input_query"] == ""
@@ -622,17 +602,9 @@ def iosxe_chat_loop(conn, host, prompt_file):
                 log.error("Received an empty dict from handle_llm_api().")
                 continue
 
-            iosxe_chat_loop_params["total_tokens"] += token_count
-
-            if "answer" in reply.keys():
-                iosxe_chat_loop_params["user_input"].append(
-                    {"role": "assistant", "content": str(reply)}
-                )
-                pydoc.pager(reply["answer"])
-                print()
-                continue
-
-            elif "command" in reply.keys():
+            # continue to process "command" responses from the LLM until its
+            # done
+            while "command" in reply.keys():
                 iosxe_chat_loop_params["user_input"].append(
                     {"role": "assistant", "content": str(reply)}
                 )
@@ -650,28 +622,29 @@ def iosxe_chat_loop(conn, host, prompt_file):
                     }
                 )
 
-            reply, token_count = handle_llm_api(
-                iosxe_chat_loop_params["user_input"]
-            )
-            if reply == {}:
-                log.error("Received an empty dict from handle_llm_api().")
-                continue
+                reply, token_count = handle_llm_api(
+                    iosxe_chat_loop_params["user_input"]
+                )
+                iosxe_chat_loop_params["total_tokens"] += token_count
 
-            iosxe_chat_loop_params["total_tokens"] += token_count
+                if reply == {}:
+                    log.error("Received an empty dict from handle_llm_api().")
+                    break
+
+            # process answer responses
             if "answer" in reply.keys():
-                # render markdown formatted answer
+                iosxe_chat_loop_params["user_input"].append(
+                    {"role": "assistant", "content": str(reply)}
+                )
+                buffer = StringIO()
+                console = Console(file=buffer, width=80)
                 console.print(Markdown(reply["answer"]))
                 md = buffer.getvalue()
                 print()
                 pydoc.pager(md)
                 print()
 
-                iosxe_chat_loop_params["user_input"].append(
-                    {
-                        "role": "assistant",
-                        "content": str(reply),
-                    }
-                )
+            # process configure responses
             elif "configure" in reply.keys():
                 print()
                 pydoc.pager("\n".join([line for line in reply["configure"]]))
@@ -690,6 +663,8 @@ def iosxe_chat_loop(conn, host, prompt_file):
                 print()
                 pydoc.pager(conf_resp)
                 print()
+
+            iosxe_chat_loop_params["total_tokens"] += token_count
 
         except OpenAIError as e:
             log.error(f"Caught OpenAIError: {e}.")
