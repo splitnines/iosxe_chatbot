@@ -24,8 +24,6 @@ very important to obey this format.
 Answer responses should be very detailed.  Include lists and bullet points and
 always be throrough.  More information is preferred over less information. 
 
-All answers should be kept to a line length of 80 characters.
-
 If a follow-up question is required to gather more information use an "answer"
 response to ask for more information.
 
@@ -80,7 +78,8 @@ The JSON schema for a command response is:
 }
 ```
 
-An answer response JSON format must be the key followed by a string:
+An answer response JSON format must be the key followed by a string.  The
+string for an answer reponse must be in markdown format.
 
 {"key": "value"}
 

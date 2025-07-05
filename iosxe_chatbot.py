@@ -5,11 +5,9 @@ import pydoc
 import re
 import readline
 import sys
-from time import sleep
+from io import StringIO
 from lib.menu import menu
 from lib.logs import logger
-from openai import OpenAI, OpenAIError
-from socket import error as s_error
 from netmiko import ConnectHandler
 from netmiko.exceptions import (
     NetMikoTimeoutException,
@@ -17,7 +15,13 @@ from netmiko.exceptions import (
     ConfigInvalidException,
     ConnectionException,
 )
+from openai import OpenAI, OpenAIError
+from rich.console import Console
+from rich.markdown import Markdown
+from socket import error as s_error
+from time import sleep
 
+# ----------------------------------------------------------------------------#
 # suppress the linter warning for importing without use
 _ = readline
 
@@ -26,6 +30,10 @@ log = logger("info")
 
 # set the pager to be used
 os.environ["PAGER"] = "more"
+
+# define the console setting for markdown formatting
+buffer = StringIO()
+console = Console(file=buffer, width=80)
 
 
 # allows the use of the arrow keys for navigating the command line/history
@@ -77,6 +85,23 @@ def readline_input(prompt=""):
 
 
 def handle_command_line_args():
+    """
+    Parse and validate command-line arguments for the iosxe_chatbot script.
+
+    This function checks the number of command-line arguments provided to the
+    script. It expects exactly one argument, which is the device IP or name.
+    If the number of arguments is incorrect, it prints the usage message to
+    standard error and exits the program with a status code of 1.
+
+    Returns:
+        str: The device IP or name provided as a command-line argument.
+
+    Raises:
+        SystemExit: If the number of command-line arguments is not equal to 2.
+
+    Usage:
+        python iosxe_chatbot.py <device IP/name>
+    """
     usage = "python iosxe_chatbot.py <device IP/name"
     if len(sys.argv) != 2:
         print(usage, file=sys.stderr)
@@ -614,8 +639,8 @@ def iosxe_chat_loop(conn, host, prompt_file):
 
                 command_resp = ""
                 for command in reply["command"]:
-                    command_resp += handle_command(
-                        iosxe_chat_loop_params["conn"], command
+                    command_resp += str(
+                        handle_command(iosxe_chat_loop_params["conn"], command)
                     )
 
                 iosxe_chat_loop_params["user_input"].append(
@@ -634,8 +659,11 @@ def iosxe_chat_loop(conn, host, prompt_file):
 
             iosxe_chat_loop_params["total_tokens"] += token_count
             if "answer" in reply.keys():
+                # render markdown formatted answer
+                console.print(Markdown(reply["answer"]))
+                md = buffer.getvalue()
                 print()
-                pydoc.pager(reply["answer"])
+                pydoc.pager(md)
                 print()
 
                 iosxe_chat_loop_params["user_input"].append(
