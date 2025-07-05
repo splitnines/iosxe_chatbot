@@ -88,23 +88,40 @@ def operator_prompt(operator_prompt_params):
 
 def handle_connect(device_params):
     """
-    Establishes a connection to a network device using the provided device
-    parameters.
+    Establishes a connection to a network device using the provided parameters.
 
-    Parameters: device_params (dict): A dictionary containing the following
-    keys:
-        - host (str): The hostname or IP address of the device.
-        - username (str): The username for authentication.
-        - password (str): The password for authentication.
+    This function attempts to create a connection to a network device using the
+    Netmiko library's `ConnectHandler`. It requires a dictionary of device
+    parameters, including host, username, and password. The connection is
+    specifically tailored for Cisco IOS devices.
 
-    Returns: ConnectHandler: A connection object representing the connection to
-    the device.
+    Parameters: ---------- device_params : dict A dictionary containing the
+    connection parameters for the device. It must include the following keys:
+        - "host" (str): The IP address or hostname of the device.
+        - "username" (str): The username for authentication.
+        - "password" (str): The password for authentication.
 
-    Raises:
-    NetMikoAuthenticationException: If authentication fails for the device.
-    ConnectionException: If a general connection exception occurs.
-    NetMikoTimeoutException: If a timeout occurs during the connection attempt.
-    Exception: For any other unhandled exceptions that may occur.
+    Returns: ------- ConnectHandler An instance of Netmiko's ConnectHandler if
+    the connection is successfully established.
+
+    Raises: ------ SystemExit If any exception occurs during the connection
+    attempt, the function logs the error and exits the program with a status
+    code of 1. The possible exceptions include:
+        - NetMikoAuthenticationException: Raised when authentication fails.
+        - ConnectionException: Raised for general connection issues.
+        - NetMikoTimeoutException: Raised when the connection attempt times
+          out.
+        - Exception: Catches any other unhandled exceptions.
+
+    Example: ------- >>> device_params = { >>>     "host": "192.168.1.1", >>>
+    "username": "admin", >>>     "password": "admin123" >>> } >>> connection =
+    handle_connect(device_params)
+
+    Notes: -----
+    - Ensure that the Netmiko library is installed and properly configured in
+      your environment.
+    - This function is designed for Cisco IOS devices; using it with other
+      device types may require modifications.
     """
     try:
         conn = ConnectHandler(
@@ -137,58 +154,106 @@ def handle_connect(device_params):
 
 def handle_command(conn, command):
     """
-    Sends a command to a connection object and returns the response.
+    Sends a command to a network device and retrieves the response.
+
+    This function handles the execution of a command on a network device
+    through a given connection object. It determines whether the command
+    is a query (ends with a question mark) or a standard command and
+    processes it accordingly. For query commands, it writes the command
+    directly to the channel and reads the response. For standard commands,
+    it uses the `send_command` method of the connection object to send
+    the command and capture the response.
 
     Parameters:
-    conn (ConnectHandler): A connection object to send the command to.
-    command (str): The command to be sent.
+    conn (object): A connection object that provides methods to interact
+                   with the network device. It must have `write_channel`
+                   and `read_channel` methods for query commands, and a
+                   `send_command` method for standard commands.
+    command (str): The command string to be sent to the network device.
+                   It can be a query (ending with '?') or a standard
+                   command.
 
     Returns:
-    str: The response received after sending the command.
+    str: The response from the network device after executing the command.
+         For query commands, the command itself is stripped from the
+         response.
 
-    This function first checks if the command ends with a question mark ('?').
-    If it does, it sends the command to the connection object and returns the
-    response after removing the command from it. If the command does not end
-    with a question mark, it sends the command to the connection object and
-    returns the response.
+    Raises:
+    AttributeError: If the connection object does not have the required
+                    methods (`write_channel`, `read_channel`, or
+                    `send_command`).
+    re.error: If there is an error in compiling the regular expression
+              used to detect the command prompt.
 
-    The response is obtained by sending the command to the connection object
-    and expecting a prompt or question mark at the end of the response. The
-    prompt or question mark is stripped from the response before returning it.
+    Example: >>> response = handle_command(conn, "show version") >>>
+    print(response) Cisco IOS Software, C2960S Software (C2960S-UNIVERSALK9-M),
+    Version 15.0(2)SE11, RELEASE SOFTWARE (fc1)
+
+    >>> response = handle_command(conn, "show ip interface brief?") >>>
+    print(response) Interface              IP-Address      OK? Method Status
+    Protocol Vlan1                  unassigned      YES unset  administratively
+    down down FastEthernet0/1        unassigned      YES unset  up
+    up
     """
+    try:
+        if re.search(r".+\?$", command):
+            conn.write_channel(command + "\n")
+            sleep(0.1)
+            resp = conn.read_channel()
+            return resp.replace(command, "")
 
-    if re.search(r".+\?$", command):
-        conn.write_channel(command + "\n")
-        sleep(0.1)
-        resp = conn.read_channel()
-        return resp.replace(command, "")
+        expect_re = re.compile(r"[#>?:]\s*$")
+        resp = conn.send_command(
+            command_string=command,
+            expect_string=expect_re,
+            strip_prompt=True,
+            strip_command=True,
+        )
+        return resp
 
-    expect_re = re.compile(r"[#>?:]\s*$")
-    resp = conn.send_command(
-        command_string=command,
-        expect_string=expect_re,
-        strip_prompt=True,
-        strip_command=True,
-    )
-
-    return resp
+    except AttributeError as e:
+        log.error(f"AttributeError in handle_command(): {e}")
+    except re.error as e:
+        log.error(f"re.error in handle_command(): {e}")
+    except Exception as e:
+        log.error(f"Unhandled exception in handle_command(): {e}")
 
 
 def handle_configure(conn, conf_list):
     """
-    Configure a network device using a list of configuration commands.
+    Sends a set of configuration commands to a network device and handles
+    potential exceptions.
 
-    Parameters:
-    conn (ConnectHandler): A connection object to the network device.
-    conf_list (list): A list of configuration commands to be sent to the
-                      device.
+    This function attempts to send a list of configuration commands to a
+    network device using the provided connection object. It logs the outcome of
+    the operation, whether successful or if an exception occurs.
 
-    Returns:
-    str: Response from the device after sending the configuration commands.
+    Parameters: ---------- conn : object A connection object that provides the
+    `send_config_set` method to send configuration commands to a network
+    device. This object is expected to handle the communication with the
+    device.
 
-    Raises:
-    ConfigInvalidException: If the configuration provided is invalid.
-    Exception: If any other error occurs during the configuration process.
+    conf_list : list of str A list of configuration commands to be sent to the
+    network device. Each command should be a string representing a valid
+    configuration command for the device.
+
+    Returns: ------- str The response from the network device after sending the
+    configuration commands. This is typically a string indicating the result of
+    the configuration operation.
+
+    Raises: ------ ConfigInvalidException If the configuration commands are
+    invalid or cannot be applied to the device. This exception is logged with
+    an error message.
+
+    Exception Any other unhandled exceptions that occur during the
+    configuration process are caught and logged with an error message.
+
+    Notes: -----
+    - Ensure that the `conn` object is properly initialized and connected to
+      the target network device before calling this function.
+    - The function logs messages using a logger named `log`, which should be
+      configured in the calling context to capture and store log messages
+      appropriately.
     """
     try:
         resp = conn.send_config_set(conf_list)
@@ -220,19 +285,46 @@ def handle_disconnect(conn, host):
 
 def handle_llm_api(user_input):
     """
-    Calls the OpenAI API with the given user input and returns the response
-    along with the total number of tokens used.
+    Interacts with the OpenAI API to process a given user input and returns the
+    response.
 
-    Parameters:
-    user_input (str): The input text to be sent to the OpenAI API.
+    This function takes a user input string, sends it to the OpenAI API using
+    the specified model, and returns the API's response along with the total
+    number of tokens used in the request. It handles various exceptions that
+    may occur during the API interaction and logs relevant information for
+    debugging purposes.
 
-    Returns:
-    tuple: A tuple containing a dictionary representing the response from the
-    OpenAI API and an integer representing the total number of tokens used.
+    Parameters: ---------- user_input : str The input string provided by the
+    user that needs to be processed by the OpenAI API.
 
-    Raises:
-    OpenAIError: If an error occurs while calling the OpenAI API.
-    Exception: If any other unexpected error occurs.
+    Returns: ------- tuple A tuple containing:
+        - reply (dict): The response from the OpenAI API, parsed as a
+          dictionary. If an error occurs, an empty dictionary is returned.
+        - total_tokens (int): The total number of tokens used in the API
+          request. If an error occurs, zero is returned.
+
+    Exceptions: ----------
+    OpenAIError Raised when there is an issue with the OpenAI API request or
+    response.
+    ValueError Raised when there is an issue with evaluating the response
+    text.
+    SyntaxError Raised when there is a syntax error in the response text.
+    Exception Catches any other unhandled exceptions that may occur.
+
+    Notes: -----
+    - Ensure that the environment variable 'OPENAI_API_KEY' is set with a valid
+      API key before calling this function.
+    - The function logs the total number of tokens used and the reply from the
+      API for debugging purposes.
+    - The function uses the 'gpt-4o' model for processing the input.
+
+    Example:
+    -------
+    >>> reply, tokens = handle_llm_api("What is the capital of France?")
+    >>> print(reply)
+    {'answer': 'Paris'}
+    >>> print(tokens)
+    15
     """
     try:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -266,29 +358,46 @@ def handle_llm_api(user_input):
 
 def operator_cmds(operator_cmd_params):
     """
-    Process operator commands based on user input.
+    Processes a set of operator commands based on user input and modifies the
+    operator command parameters accordingly.
 
-    Parameters:
-    operator_cmd_params (dict): A dictionary containing various parameters like
-    user input, input query, prompt, context depth, etc.
+    This function interprets the user's input query and performs actions such
+    as starting a new context window, displaying prompts, reloading prompts,
+    sending commands to a device, or quitting the program. It updates the
+    `operator_cmd_params` dictionary based on the command executed.
 
-    Returns:
-    dict: Updated operator command parameters after processing the user input.
+    Parameters: ----------
+        operator_cmd_params : dict A dictionary containing
+        the following keys:
+            - "user_input" (str): The current user input.
+            - "input_query" (str): The query string to be processed.
+            - "prompt" (str): The developer prompt to be displayed or reloaded.
+            - "prompt_file" (str): The file path to reload the developer prompt
+              from.
+            - "conn" (object): The connection object to send commands to a
+              device.
+            - "host" (str): The host address for the connection.
+            - "total_tokens" (int): The total number of tokens processed.
+            - "context_depth" (int): The current depth of the context window.
 
-    This function processes different operator commands based on the user input
-    provided. It checks the input query and performs specific actions
-    accordingly.
+    Returns: -------
+        dict The updated `operator_cmd_params` dictionary after processing the
+        input query.
 
-    Supported operator commands:
-    - /n: Start a new context window
-    - /p: Display the developer prompt
-    - /m: Display the command menu
-    - /r: Reload the developer prompt
-    - /c: Send a command to the device directly
-    - /q: Quit the program
+    Raises: ------
+        SystemExit If the input query starts with "/q", the program will exit.
 
-    The function returns the updated operator command parameters after
-    processing the user input.
+    Notes: -----
+    - If the `user_input` is an empty string, the function returns the input
+      `operator_cmd_params` without any modifications.
+    - The function uses regular expressions to parse commands that start with
+      "/c".
+    - The function logs various actions and errors using a logging mechanism.
+    - The function uses `pydoc.pager` to display content in a paginated manner.
+    - The function assumes the existence of external functions such as
+      `menu()`, `developer_input_prompt()`, `handle_command()`,
+      `log_total_tokens()`, and `handle_disconnect()` which are not defined
+      within this code snippet.
     """
     if operator_cmd_params["user_input"] == "":
         return operator_cmd_params
@@ -355,27 +464,49 @@ def operator_cmds(operator_cmd_params):
 
 def iosxe_chat_loop(conn, host, prompt_file):
     """
-    Function to initiate a chat loop with an IOSXE device.
+    Initiates and manages an interactive chat loop with an IOS-XE device using
+    a language model.
 
-    Parameters:
-    - conn: SSH connection object to the device
-    - host: IP address or hostname of the device
-    - prompt_file: File containing prompts for the chat loop
+    This function facilitates a continuous interaction between a user and an
+    IOS-XE device by leveraging a language model to interpret user inputs and
+    generate appropriate responses or commands. The function handles various
+    types of user inputs, including direct commands and queries, and processes
+    them accordingly. It also manages the context of the conversation, ensuring
+    that the interaction remains coherent and contextually relevant.
 
-    Returns:
-    - None
+    Parameters: ----------- conn : object A connection object that represents
+    the session with the IOS-XE device. This object is used to send commands
+    and receive responses from the device. host : str The hostname or IP
+    address of the IOS-XE device. This is used for logging and tracking
+    purposes. prompt_file : str The path to a file containing the initial
+    prompt or context for the language model. This file is used to initialize
+    the conversation and provide context for the language model's responses.
 
-    Raises:
-    - OpenAIError: If there is an error with the OpenAI API
-    - JSONDecodeError: If there is an error decoding JSON data
-    - ConnectionException: If there is an issue with the SSH connection
-    - socket.error: If there is a socket error
-    - Exception: For any other unhandled exceptions
+    Raises: ------- OpenAIError If an error occurs while interacting with the
+    language model API. ConnectionException If there is a failure in the
+    connection to the IOS-XE device. socket.error If a socket-related error
+    occurs during the operation. Exception For any other unhandled exceptions
+    that may arise during the execution of the function.
 
-    This function sets up a chat loop with an IOSXE device using the provided
-    SSH connection object and prompts from a file. It prompts the user for
-    input, processes the input, and interacts with the device accordingly. The
-    loop continues until the user decides to exit.
+    Notes: ------
+    - The function maintains a loop that continuously prompts the user for
+      input, processes the input, and generates responses using a language
+      model.
+    - The function supports special commands prefixed with '/' that allow users
+      to perform specific operations or modify the behavior of the chat loop.
+    - The function logs all interactions and errors for auditing and debugging
+      purposes.
+    - The function uses a context depth counter to manage the depth of the
+      conversation and ensure that the language model has sufficient context to
+      generate meaningful responses.
+    - The function handles both 'answer' and 'command' types of responses from
+      the language model, executing commands on the IOS-XE device as needed and
+      displaying the results to the user.
+    - The function also supports configuration changes on the IOS-XE device,
+      prompting the user to commit or discard changes as necessary.
+
+    Example: -------- >>> iosxe_chat_loop(conn, '192.168.1.1',
+    'initial_prompt.txt')
     """
     iosxe_chat_loop_params = {
         "conn": conn,

@@ -8,6 +8,39 @@ DAY = dt.today().strftime("%m%d%Y")
 
 
 def logger(log_level="info"):
+    """
+    Configures and returns a logger instance with specified log level.
+
+    This function sets up a logger that writes log messages to both a file and
+    the standard output (stdout). The log messages are formatted with
+    timestamps, log levels, and the actual log message. The log files are
+    stored in a directory named 'logs', and the log file is named with the
+    current date.
+
+    Parameters: ----------
+        log_level : str, optional The logging level to be 0set for the logger.
+        It can be one of the following: 'debug', 'info', 'warning', 'error',
+        'critical'. Default is 'info'.
+
+    Returns: -------
+        logging.Logger A configured logger instance.
+
+    Raises: ------
+        KeyError If the provided log_level is not one of the predefined levels.
+
+    Notes: -----
+    - The function checks for the existence of a 'logs' directory and creates
+      it if it does not exist.
+    - The log file is named using the format 'iosxe_chatbot_<DAY>.log', where
+      <DAY> is the current date.
+    - The function also sets the logging level for 'netmiko' and 'openai'
+      loggers to the specified log_level.
+
+    Examples: --------
+        >>> log = logger("debug")
+        >>> log.info("This is an info message.")
+        >>> log.error("This is an error message.")
+    """
     if not os.path.exists("logs"):
         os.mkdir("logs")
 
