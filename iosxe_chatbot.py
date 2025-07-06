@@ -21,8 +21,6 @@ from rich.markdown import Markdown
 from socket import error as s_error
 from time import sleep
 
-# ----------------------------------------------------------------------------#
-#
 # suppress the linter warning for importing without use
 _ = readline
 
@@ -31,8 +29,6 @@ log = logger("info")
 
 # set the pager to be used
 os.environ["PAGER"] = "more"
-
-# define the console setting for markdown formatting
 
 
 # allows the use of the arrow keys for navigating the command line/history
@@ -101,7 +97,7 @@ def handle_command_line_args():
     Usage:
         python iosxe_chatbot.py <device IP/name>
     """
-    usage = "python iosxe_chatbot.py <device IP/name"
+    usage = "Usage: python iosxe_chatbot.py <DEVICE_IP_OR_HOSTNAME>"
     if len(sys.argv) != 2:
         print(usage, file=sys.stderr)
         sys.exit(1)
@@ -259,12 +255,17 @@ def handle_command(conn, command):
     down down FastEthernet0/1        unassigned      YES unset  up
     up
     """
+    device_prompt = ios_prompt(conn)
     try:
         if re.search(r".+\?$", command):
             conn.write_channel(command + "\n")
             sleep(0.1)
             resp = conn.read_channel()
-            return resp.replace(command, "")
+            resp = resp.replace(command, "")
+            resp = resp.replace(device_prompt, "")
+            resp = resp.replace("% Incomplete command.", "")
+            resp = resp.replace(command.replace("?", ""), "")
+            return resp
 
         expect_re = re.compile(r"[#>?:]\s*$")
         resp = conn.send_command(
@@ -543,7 +544,8 @@ def iosxe_chat_loop(conn, host, prompt_file):
                        the chat context.
 
     Raises:
-    OpenAIError: If an error occurs while interacting with the language model API.
+    OpenAIError: If an error occurs while interacting with the language model
+                 API.
     ConnectionException: If there is a connection issue with the IOS-XE device.
     socket.error: If a socket error occurs during the operation.
     Exception: For any other unhandled exceptions that may arise.
@@ -679,11 +681,12 @@ def iosxe_chat_loop(conn, host, prompt_file):
 
 
 def main():
+    host = handle_command_line_args()
     clear_screen()
 
     main_params = {
         # get the host from the user cli args
-        "host": handle_command_line_args(),
+        "host": host,
         "username": os.environ["TESTBED_USERNAME"],
         "password": os.environ["TESTBED_PASSWORD"],
     }

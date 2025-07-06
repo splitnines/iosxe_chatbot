@@ -38,6 +38,9 @@ be in the same list, not a separate dictionary:
 
 {"command": ["show ip interface brief", "show ip protocol"]}
 
+If additional command responses are required to gather more information from
+the device then followup command responses may be sent.
+
 The JSON schema for a command response is:
 
 ```json

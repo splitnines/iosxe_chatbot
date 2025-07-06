@@ -1,10 +1,60 @@
+import ast
 import logging
 import os
+import re
 import sys
 from datetime import datetime as dt
 
 
 DAY = dt.today().strftime("%m%d%Y")
+
+
+class DecodeBytesFilter(logging.Filter):
+    """
+    Filter log records to decode and replace byte literals in authentication
+    banner messages with their UTF-8 string representation.
+
+    This filter processes log records to identify messages containing an
+    authentication banner in the form of a byte literal. If such a message is
+    found, the byte literal is decoded into a UTF-8 string and replaces the
+    original byte literal in the log message. This transformation is useful for
+    improving the readability of log messages that include byte data.
+
+    Returns:
+        bool: Always returns True to indicate that the log record should be
+        processed by other filters and handlers.
+
+    Raises:
+        Exception: Catches and suppresses any exceptions that occur during the
+        evaluation and decoding of the byte literal. This ensures that the
+        logging process is not interrupted by errors in decoding.
+
+    Note:
+        This filter assumes that the log message is a string and contains the
+        specific pattern "Auth banner:". It uses regular expressions to search
+        for byte literals and the `ast.literal_eval` function to safely
+        evaluate the byte literal. If the byte literal is successfully decoded,
+        it is replaced in the log message; otherwise, the original message
+        remains unchanged.
+    """
+
+    def filter(self, record):
+        if isinstance(record.msg, str) and "Auth banner:" in record.msg:
+            match = re.search(
+                r"Auth banner:\s*(b(['\"]).*?\2)", record.msg, re.DOTALL
+            )
+            if match:
+                raw_bytes_literal = match.group(1)
+                try:
+                    banner_bytes = ast.literal_eval(raw_bytes_literal)
+                    if isinstance(banner_bytes, bytes):
+                        decoded = banner_bytes.decode(
+                            "utf-8", errors="replace"
+                        ).strip()
+                        record.msg = f"Auth banner:\n{decoded}"
+                except Exception:
+                    pass
+        return True
 
 
 def logger(log_level="info"):
@@ -62,11 +112,15 @@ def logger(log_level="info"):
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
+    decode_filter = DecodeBytesFilter()
+
     file_handler = logging.FileHandler(f"logs/iosxe_chatbot_{DAY}.log")
+    file_handler.addFilter(decode_filter)
     file_handler.setLevel(LOG_LEVELS[log_level])
     file_handler.setFormatter(file_formatter)
 
     stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.addFilter(decode_filter)
     stdout_handler.setLevel(LOG_LEVELS[log_level])
     stdout_handler.setFormatter(stdout_formatter)
 
