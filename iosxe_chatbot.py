@@ -256,15 +256,25 @@ def handle_command(conn, command):
     up
     """
     device_prompt = ios_prompt(conn)
+
+    # lisr of strings used top clean up raw output
+    replace_strings = [
+        command,
+        device_prompt,
+        "% Incomplete command.",
+        command.replace("?", ""),
+        "\n\n",
+    ]
+
     try:
         if re.search(r".+\?$", command):
             conn.write_channel(command + "\n")
             sleep(0.1)
             resp = conn.read_channel()
-            resp = resp.replace(command, "")
-            resp = resp.replace(device_prompt, "")
-            resp = resp.replace("% Incomplete command.", "")
-            resp = resp.replace(command.replace("?", ""), "")
+
+            for replace_string in replace_strings:
+                resp = resp.replace(replace_string, "")
+
             return resp
 
         expect_re = re.compile(r"[#>?:]\s*$")
