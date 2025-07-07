@@ -1,4 +1,4 @@
-# Terminal IOSXE Chatbot
+# Terminal IOSXE Chatbot (Trixc)
 
 **Terminal-based chatbot assistant for Cisco IOS-XE devices powered by OpenAI GPT-4o**
 
@@ -22,7 +22,7 @@ The chatbot uses `Netmiko` for device interaction and integrates with OpenAI's A
 ## Demo
 
 ```bash
-$ python iosxe_chatbot.py 192.0.2.1
+$ python trixc.py 192.0.2.1
 ┌──(0)-[IOS-XE Chatbot]
 └─ R1#
 ```
