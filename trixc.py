@@ -661,6 +661,7 @@ def iosxe_chat_loop(conn, host, prompt_file):
                 print()
                 pydoc.pager("\n".join([line for line in reply["configure"]]))
                 print()
+
                 if commit_change() is False:
                     print("Discarding changes.\n")
                     continue
@@ -695,7 +696,6 @@ def main():
     clear_screen()
 
     main_params = {
-        # get the host from the user cli args
         "host": host,
         "username": os.environ["TESTBED_USERNAME"],
         "password": os.environ["TESTBED_PASSWORD"],

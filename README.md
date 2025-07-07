@@ -1,4 +1,4 @@
-# IOSXE Chatbot
+# Terminal IOSXE Chatbot
 
 **Terminal-based chatbot assistant for Cisco IOS-XE devices powered by OpenAI GPT-4o**
 
@@ -6,7 +6,7 @@
 
 ## Description
 
-**IOSXE Chatbot** is a terminal-driven assistant designed for network engineers to interact with Cisco IOS-XE routers and switches. It leverages the OpenAI GPT-4o API to provide intelligent responses and suggested commands, facilitating easier diagnostics, troubleshooting, and device configuration through a conversational interface.
+**Terminal IOSXE Chatbot** is a terminal-driven assistant designed for network engineers to interact with Cisco IOS-XE routers and switches. It leverages the OpenAI GPT-4o API to provide intelligent responses and suggested commands, facilitating easier diagnostics, troubleshooting, and device configuration through a conversational interface.
 
 The chatbot uses `Netmiko` for device interaction and integrates with OpenAI's API to process user queries and generate JSON-formatted command, answer, or configuration responses. It adheres to a strict prompt specification to ensure predictable, machine-parsable outputs.
 
@@ -65,7 +65,7 @@ export OPENAI_API_KEY=your_openai_api_key
 ### 4. Run the Chatbot
 
 ```bash
-python iosxe_chatbot.py <DEVICE_IP_OR_HOSTNAME>
+python trixc.py <DEVICE_IP_OR_HOSTNAME>
 ```
 
 ## Prompt Design
