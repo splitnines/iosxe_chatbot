@@ -32,7 +32,7 @@ os.environ["PAGER"] = "more"
 
 
 # allows the use of the arrow keys for navigating the command line/history
-def readline_input(prompt=""):
+def safe_input(prompt=""):
     """
     Reads a line of input from the user, displaying an optional prompt.
 
@@ -57,13 +57,13 @@ def readline_input(prompt=""):
 
     Examples:
     --------
-    >>> name = readline_input("Enter your name: ")
+    >>> name = safe_input("Enter your name: ")
     Enter your name: John
     >>> print(name)
     John
 
     >>> # Simulating EOFError by sending EOF signal
-    >>> readline_input("Enter something: ")
+    >>> safe_input("Enter something: ")
     Enter something:
     ''
 
@@ -79,7 +79,7 @@ def readline_input(prompt=""):
         return ""
 
 
-def handle_command_line_args():
+def parse_device_args():
     """
     Parse and validate command-line arguments for the iosxe_chatbot script.
 
@@ -105,48 +105,50 @@ def handle_command_line_args():
     return sys.argv[1]
 
 
-def clear_screen():
+def clear_terminal():
     if platform.system() == "Windows":
         os.system("cls")
     else:
         os.system("clear")
 
 
-def developer_input_prompt(filename):
+def load_prompt_from_file(filename):
     with open(filename, "r") as f:
         prompt = f.read()
     return prompt
 
 
-def ios_prompt(conn):
+def get_device_prompt(conn):
     return conn.find_prompt()
 
 
-def log_total_tokens(total_tokens):
+def log_session_tokens(total_tokens):
     print()
     log.info(f"Total tokens consumed for the session {total_tokens}")
 
 
-def commit_change():
-    operator_permission = readline_input("Commit changes [y/n]: ")
+def confirm_config_change():
+    operator_permission = safe_input("Commit changes [y/n]: ")
     if operator_permission.lower() == "y":
         return True
     elif operator_permission.lower() == "n":
         return False
     else:
-        return commit_change()
+        return confirm_config_change()
 
 
-def operator_prompt(operator_prompt_params):
-    prompt = f"┌──({operator_prompt_params['context_depth']})-[IOS-XE Chatbot]"
-    device_prompt = ios_prompt(operator_prompt_params["conn"])
+def get_operator_input(get_operator_input_params):
+    prompt = (
+        f"┌──({get_operator_input_params['context_depth']})-[IOS-XE Chatbot]"
+    )
+    device_prompt = get_device_prompt(get_operator_input_params["conn"])
     print(prompt)
-    operator_input = readline_input(f"└─ {device_prompt} ")
+    operator_input = safe_input(f"└─ {device_prompt} ")
 
     return operator_input
 
 
-def handle_connect(device_params):
+def connect_to_device(device_params):
     """
     Establishes a connection to a network device using the provided parameters.
 
@@ -175,7 +177,7 @@ def handle_connect(device_params):
 
     Example: ------- >>> device_params = { >>>     "host": "192.168.1.1", >>>
     "username": "admin", >>>     "password": "admin123" >>> } >>> connection =
-    handle_connect(device_params)
+    connect_to_device(device_params)
 
     Notes: -----
     - Ensure that the Netmiko library is installed and properly configured in
@@ -212,7 +214,7 @@ def handle_connect(device_params):
         sys.exit(1)
 
 
-def handle_command(conn, command):
+def send_device_command(conn, command):
     """
     Sends a command to a network device and retrieves the response.
 
@@ -245,20 +247,20 @@ def handle_command(conn, command):
     re.error: If there is an error in compiling the regular expression
               used to detect the command prompt.
 
-    Example: >>> response = handle_command(conn, "show version") >>>
+    Example: >>> response = send_device_command(conn, "show version") >>>
     print(response) Cisco IOS Software, C2960S Software (C2960S-UNIVERSALK9-M),
     Version 15.0(2)SE11, RELEASE SOFTWARE (fc1)
 
-    >>> response = handle_command(conn, "show ip interface brief?") >>>
+    >>> response = send_device_command(conn, "show ip interface brief?") >>>
     print(response) Interface              IP-Address      OK? Method Status
     Protocol Vlan1                  unassigned      YES unset  administratively
     down down FastEthernet0/1        unassigned      YES unset  up
     up
     """
-    device_prompt = ios_prompt(conn)
+    device_prompt = get_device_prompt(conn)
 
     # lisr of strings used top clean up raw output
-    replace_strings = [
+    conn_read_replace_strings = [
         command,
         device_prompt,
         "% Incomplete command.",
@@ -272,8 +274,8 @@ def handle_command(conn, command):
             sleep(0.1)
             resp = conn.read_channel()
 
-            for replace_string in replace_strings:
-                resp = resp.replace(replace_string, "")
+            for string in conn_read_replace_strings:
+                resp = resp.replace(string, "")
 
             return resp
 
@@ -284,17 +286,18 @@ def handle_command(conn, command):
             strip_prompt=True,
             strip_command=True,
         )
+
         return resp
 
     except AttributeError as e:
-        log.error(f"AttributeError in handle_command(): {e}")
+        log.error(f"AttributeError in send_device_command(): {e}")
     except re.error as e:
-        log.error(f"re.error in handle_command(): {e}")
+        log.error(f"re.error in send_device_command(): {e}")
     except Exception as e:
-        log.error(f"Unhandled exception in handle_command(): {e}")
+        log.error(f"Unhandled exception in send_device_command(): {e}")
 
 
-def handle_configure(conn, conf_list):
+def send_config_to_device(conn, conf_list):
     """
     Sends a set of configuration commands to a network device and handles
     potential exceptions.
@@ -337,10 +340,10 @@ def handle_configure(conn, conf_list):
     except ConfigInvalidException as e:
         log.error(f"ConfigInvalidException: {e}")
     except Exception as e:
-        log.error(f"Unhandled exception in handle_configure(): {e}")
+        log.error(f"Unhandled exception in send_config_to_device(): {e}")
 
 
-def handle_disconnect(conn, host):
+def disconnect_device(conn, host):
     """
     Handles the disconnection of a connection to a host.
 
@@ -358,7 +361,7 @@ def handle_disconnect(conn, host):
     log.info(f"Connection to {host} closed.")
 
 
-def handle_llm_api(user_input):
+def query_llm_api(user_input):
     """
     Interacts with the OpenAI API to process a given user input and returns the
     response.
@@ -395,7 +398,7 @@ def handle_llm_api(user_input):
 
     Example:
     -------
-    >>> reply, tokens = handle_llm_api("What is the capital of France?")
+    >>> reply, tokens = query_llm_api("What is the capital of France?")
     >>> print(reply)
     {'answer': 'Paris'}
     >>> print(tokens)
@@ -422,16 +425,16 @@ def handle_llm_api(user_input):
     except OpenAIError as e:
         log.error(f"OpenAIError: {e}")
     except ValueError as e:
-        log.error(f"ValueError in handle_llm_api(): {e}")
+        log.error(f"ValueError in query_llm_api(): {e}")
     except SyntaxError as e:
-        log.error(f"SyntaxError in handle_llm_api(): {e}")
+        log.error(f"SyntaxError in query_llm_api(): {e}")
     except Exception as e:
-        log.error(f"Unhandled exception in handle_llm_api(): {e}")
+        log.error(f"Unhandled exception in query_llm_api(): {e}")
 
     return {}, 0
 
 
-def operator_cmds(operator_cmd_params):
+def process_operator_commands(operator_cmd_params):
     """
     Processes a set of operator commands based on user input and modifies the
     operator command parameters accordingly.
@@ -470,8 +473,8 @@ def operator_cmds(operator_cmd_params):
     - The function logs various actions and errors using a logging mechanism.
     - The function uses `pydoc.pager` to display content in a paginated manner.
     - The function assumes the existence of external functions such as
-      `menu()`, `developer_input_prompt()`, `handle_command()`,
-      `log_total_tokens()`, and `handle_disconnect()` which are not defined
+      `menu()`, `load_prompt_from_file()`, `send_device_command()`,
+      `log_session_tokens()`, and `disconnect_device()` which are not defined
       within this code snippet.
     """
     if operator_cmd_params["user_input"] == "":
@@ -500,7 +503,7 @@ def operator_cmds(operator_cmd_params):
 
     # Reload the developer prompt
     elif operator_cmd_params["input_query"].startswith("/r"):
-        operator_cmd_params["prompt"] = developer_input_prompt(
+        operator_cmd_params["prompt"] = load_prompt_from_file(
             operator_cmd_params["prompt_file"]
         )
         log.info("Prompt reloaded.")
@@ -520,7 +523,9 @@ def operator_cmds(operator_cmd_params):
             operator_cmd_params["input_query"]
         ):
             command = match.group(1)
-            command_resp = handle_command(operator_cmd_params["conn"], command)
+            command_resp = send_device_command(
+                operator_cmd_params["conn"], command
+            )
             pydoc.pager(str(command_resp))
             print()
         else:
@@ -528,8 +533,8 @@ def operator_cmds(operator_cmd_params):
 
     # Quit the program
     elif operator_cmd_params["input_query"].startswith("/q"):
-        log_total_tokens(operator_cmd_params["total_tokens"])
-        handle_disconnect(
+        log_session_tokens(operator_cmd_params["total_tokens"])
+        disconnect_device(
             operator_cmd_params["conn"], operator_cmd_params["host"]
         )
         sys.exit(0)
@@ -537,7 +542,7 @@ def operator_cmds(operator_cmd_params):
     return operator_cmd_params
 
 
-def iosxe_chat_loop(conn, host, prompt_file):
+def run_chat_loop(conn, host, prompt_file):
     """
     Initiates and manages an interactive chat loop with an IOS-XE device using
     a language model for processing and responding to user inputs.
@@ -564,88 +569,92 @@ def iosxe_chat_loop(conn, host, prompt_file):
     The function will continue to run indefinitely until manually stopped or
     an unhandled exception causes it to exit.
     """
-    iosxe_chat_loop_params = {
+    run_chat_loop_params = {
         "conn": conn,
         "host": host,
         "context_depth": 0,
         "prompt_file": prompt_file,
         "total_tokens": 0,
-        "prompt": developer_input_prompt(prompt_file),
+        "prompt": load_prompt_from_file(prompt_file),
     }
 
     token_count = 0
 
     menu()
 
-    iosxe_chat_loop_params["user_input"] = [
-        {"role": "developer", "content": iosxe_chat_loop_params["prompt"]}
+    run_chat_loop_params["user_input"] = [
+        {"role": "developer", "content": run_chat_loop_params["prompt"]}
     ]
     while True:
         try:
             # prompt the operator
-            iosxe_chat_loop_params["input_query"] = operator_prompt(
-                iosxe_chat_loop_params
+            run_chat_loop_params["input_query"] = get_operator_input(
+                run_chat_loop_params
             )
             print()
 
             # parse the escaped commands from the operator
             if (
-                iosxe_chat_loop_params["input_query"].startswith("/")
-                or iosxe_chat_loop_params["input_query"] == ""
+                run_chat_loop_params["input_query"].startswith("/")
+                or run_chat_loop_params["input_query"] == ""
             ):
-                iosxe_chat_loop_params = operator_cmds(iosxe_chat_loop_params)
+                run_chat_loop_params = process_operator_commands(
+                    run_chat_loop_params
+                )
                 continue
 
-            log.info(f"Query to LLM: {iosxe_chat_loop_params['input_query']}")
+            log.info(f"Query to LLM: {run_chat_loop_params['input_query']}")
 
-            iosxe_chat_loop_params["user_input"].append(
+            run_chat_loop_params["user_input"].append(
                 {
                     "role": "user",
-                    "content": iosxe_chat_loop_params["input_query"],
+                    "content": run_chat_loop_params["input_query"],
                 }
             )
 
-            iosxe_chat_loop_params["context_depth"] += 1
+            run_chat_loop_params["context_depth"] += 1
 
-            reply, token_count = handle_llm_api(
-                iosxe_chat_loop_params["user_input"]
+            reply, token_count = query_llm_api(
+                run_chat_loop_params["user_input"]
             )
             if reply == {}:
-                log.error("Received an empty dict from handle_llm_api().")
+                log.error("Received an empty dict from query_llm_api().")
                 continue
 
             # continue to process "command" responses from the LLM until its
             # done
             while "command" in reply.keys():
-                iosxe_chat_loop_params["user_input"].append(
+                run_chat_loop_params["user_input"].append(
                     {"role": "assistant", "content": str(reply)}
                 )
 
                 command_resp = ""
                 for command in reply["command"]:
                     command_resp += str(
-                        handle_command(iosxe_chat_loop_params["conn"], command)
+                        send_device_command(
+                            run_chat_loop_params["conn"], command
+                        )
                     )
 
-                iosxe_chat_loop_params["user_input"].append(
+                run_chat_loop_params["user_input"].append(
                     {
                         "role": "user",
                         "content": str(command_resp),
                     }
                 )
 
-                reply, token_count = handle_llm_api(
-                    iosxe_chat_loop_params["user_input"]
+                reply, token_count = query_llm_api(
+                    run_chat_loop_params["user_input"]
                 )
-                iosxe_chat_loop_params["total_tokens"] += token_count
+                run_chat_loop_params["total_tokens"] += token_count
 
                 if reply == {}:
-                    log.error("Received an empty dict from handle_llm_api().")
+                    log.error("Received an empty dict from query_llm_api().")
                     break
 
             # process answer responses
             if "answer" in reply.keys():
-                iosxe_chat_loop_params["user_input"].append(
+                run_chat_loop_params["user_input"].append(
                     {"role": "assistant", "content": str(reply)}
                 )
                 buffer = StringIO()
@@ -662,13 +671,13 @@ def iosxe_chat_loop(conn, host, prompt_file):
                 pydoc.pager("\n".join([line for line in reply["configure"]]))
                 print()
 
-                if commit_change() is False:
+                if confirm_config_change() is False:
                     print("Discarding changes.\n")
                     continue
 
                 conf_resp = (
-                    handle_configure(
-                        iosxe_chat_loop_params["conn"],
+                    send_config_to_device(
+                        run_chat_loop_params["conn"],
                         reply["configure"],
                     )
                     or ""
@@ -677,23 +686,23 @@ def iosxe_chat_loop(conn, host, prompt_file):
                 pydoc.pager(conf_resp)
                 print()
 
-            iosxe_chat_loop_params["total_tokens"] += token_count
+            run_chat_loop_params["total_tokens"] += token_count
 
         except OpenAIError as e:
             log.error(f"Caught OpenAIError: {e}.")
         except ConnectionException as e:
-            log.error(f"ConnectionException in iosxe_chat_loop(): {e}")
+            log.error(f"ConnectionException in run_chat_loop(): {e}")
             sys.exit(1)
         except s_error as e:
-            log.error(f"socket.error in iosxe_chat_loop(): {e}")
+            log.error(f"socket.error in run_chat_loop(): {e}")
             sys.exit(1)
         except Exception as e:
-            log.error(f"Unhandled exception in iosxe_chat_loop(): {e}")
+            log.error(f"Unhandled exception in run_chat_loop(): {e}")
 
 
 def main():
-    host = handle_command_line_args()
-    clear_screen()
+    host = parse_device_args()
+    clear_terminal()
 
     main_params = {
         "host": host,
@@ -706,15 +715,15 @@ def main():
         log.error(f"File {prompt_file} does not exist.")
         sys.exit(1)
 
-    conn = handle_connect(main_params)
+    conn = connect_to_device(main_params)
 
     try:
-        total_tokens = iosxe_chat_loop(conn, main_params["host"], prompt_file)
-        log_total_tokens(total_tokens)
-        handle_disconnect(conn, main_params["host"])
+        total_tokens = run_chat_loop(conn, main_params["host"], prompt_file)
+        log_session_tokens(total_tokens)
+        disconnect_device(conn, main_params["host"])
     except KeyboardInterrupt:
         log.warning("KeyboardInterrupt....exiting.")
-        handle_disconnect(conn, main_params["host"])
+        disconnect_device(conn, main_params["host"])
     except Exception as e:
         log.error(f"Exception caught in main(): {e}")
 
