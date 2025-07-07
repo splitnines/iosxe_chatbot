@@ -701,7 +701,7 @@ def main():
         "password": os.environ["TESTBED_PASSWORD"],
     }
 
-    prompt_file = "iosxe_prompt.md"
+    prompt_file = "ixc_prompt.md"
     if not os.path.exists(prompt_file):
         log.error(f"File {prompt_file} does not exist.")
         sys.exit(1)
