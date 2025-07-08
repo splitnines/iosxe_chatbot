@@ -143,4 +143,7 @@ response.
 
 # Device information
 
+The information below can be used for providing assistant on the state of the
+IOS-XE device:
+
 

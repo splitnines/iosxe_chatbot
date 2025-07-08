@@ -180,14 +180,18 @@ def models(model_key):
 
 
 def get_device_info(conn):
-    ios_xe_version = send_device_command(
-        conn, "show version | include Cisco IOS Software"
-    )
-    chassis = send_device_command(conn, "show platform | include Chassis")
+    show_version = send_device_command(conn, "show version")
+    show_platform = send_device_command(conn, "show platform")
 
     device_info = "```json\n"
-    device_info += f'{{\n    "IOS-XE Version": "{ios_xe_version}",\n'
-    device_info += f'    "Chassis": "{chassis}"\n}}\n\n'
+    if match := re.search(r"Version +(\d+\.\d+\.\d+\w*)", str(show_version)):
+        version = match.group(1)
+        device_info += f'{{\n    "IOS-XE Version": "{version}",\n'
+
+    if match := re.search(r"Chassis type: (.+)", str(show_platform)):
+        chassis = match.group(1)
+        device_info += f'    "Chassis": "{chassis}"\n}}\n\n'
+
     device_info += "```"
 
     return device_info
