@@ -179,6 +179,20 @@ def models(model_key):
         print(f"Unhandled exception in models(): {e}")
 
 
+def get_device_info(conn):
+    ios_xe_version = send_device_command(
+        conn, "show version | include Cisco IOS Software"
+    )
+    chassis = send_device_command(conn, "show platform | include Chassis")
+
+    device_info = "```json\n"
+    device_info += f'{{\n    "IOS-XE Version": "{ios_xe_version}",\n'
+    device_info += f'    "Chassis": "{chassis}"\n}}\n\n'
+    device_info += "```"
+
+    return device_info
+
+
 def connect_to_device(device_params):
     """
     Establishes a connection to a network device using the provided parameters.
@@ -539,6 +553,11 @@ def process_operator_commands(operator_cmd_params):
         )
         log.info("Prompt reloaded.")
         log.info("New context window started.\n")
+
+        operator_cmd_params["prompt"] += get_device_info(
+            operator_cmd_params["conn"]
+        )
+
         operator_cmd_params["user_input"] = [
             {
                 "role": "developer",
@@ -624,6 +643,8 @@ def run_chat_loop(conn, host, prompt_file):
     token_count = 0
 
     menu()
+
+    run_chat_loop_params["prompt"] += get_device_info(conn)
 
     run_chat_loop_params["user_input"] = [
         {"role": "developer", "content": run_chat_loop_params["prompt"]}

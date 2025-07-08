@@ -140,3 +140,7 @@ response.
   </assistant_response>
 </conversation>
 ```
+
+# Device information
+
+
