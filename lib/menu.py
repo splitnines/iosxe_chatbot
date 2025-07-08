@@ -15,9 +15,11 @@ def menu():
         /m  - print this menu
         /n  - start a new context window
         /p  - print the developer prompt
-        /r  - reload the developer prompt
         /q  - quit the program1
-
+        /r  - reload the developer prompt
+        /s  - Select model
+               1: o4-mini        2: gpt-4o
+               3: gpt-4.1-mini   4: gpt-4.1
 
         To interact with the LMM just type you query.
 

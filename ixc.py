@@ -3,7 +3,6 @@ import os
 import platform
 import pydoc
 import re
-import readline
 import sys
 from io import StringIO
 from lib.menu import menu
@@ -22,7 +21,11 @@ from socket import error as s_error
 from time import sleep
 
 # suppress the linter warning for importing without use
-_ = readline
+# only import on non-windows
+if platform.system() != "Windows":
+    import readline
+
+    _ = readline
 
 # set the logging
 log = logger("info")
@@ -138,14 +141,42 @@ def confirm_config_change():
 
 
 def get_operator_input(get_operator_input_params):
-    prompt = (
-        f"┌──({get_operator_input_params['context_depth']})-[IOS-XE Chatbot]"
-    )
+    model = get_operator_input_params["model"]
+    prompt_text = f"(IOS-XE Chatbot)-({model})"
+    prompt = f"┌──({get_operator_input_params['context_depth']})-{prompt_text}"
     device_prompt = get_device_prompt(get_operator_input_params["conn"])
     print(prompt)
     operator_input = safe_input(f"└─ {device_prompt} ")
 
     return operator_input
+
+
+def format_answer(reply):
+    if platform.system() == "Windows":
+        return reply
+
+    buffer = StringIO()
+    console = Console(file=buffer, width=80)
+    console.print(Markdown(reply))
+    md = buffer.getvalue()
+
+    return md
+
+
+def models(model_key):
+    try:
+        model = {
+            1: "o4-mini",
+            2: "gpt-4o",
+            3: "gpt-4.1-mini",
+            4: "gpt-4.1",
+        }
+
+        return model[model_key]
+    except KeyError as e:
+        print(f"KeyError in models(): {e}")
+    except Exception as e:
+        print(f"Unhandled exception in models(): {e}")
 
 
 def connect_to_device(device_params):
@@ -361,7 +392,7 @@ def disconnect_device(conn, host):
     log.info(f"Connection to {host} closed.")
 
 
-def query_llm_api(user_input):
+def query_llm_api(api_params):
     """
     Interacts with the OpenAI API to process a given user input and returns the
     response.
@@ -407,8 +438,8 @@ def query_llm_api(user_input):
     try:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.responses.create(
-            model="gpt-4o",
-            input=user_input,
+            model=api_params["model"],
+            input=api_params["user_input"],
         )
         if response is not None:
             total_tokens = 0
@@ -531,6 +562,17 @@ def process_operator_commands(operator_cmd_params):
         else:
             log.error("Could not parse the command.\n")
 
+    # Select model
+    elif operator_cmd_params["input_query"].startswith("/s"):
+        if match := re.search(
+            r"^/s\s+([1-4])", operator_cmd_params["input_query"]
+        ):
+            model_key = match.group(1)
+            if int(model_key) in range(1, 5):
+                operator_cmd_params["model"] = models(int(model_key))
+            else:
+                menu()
+
     # Quit the program
     elif operator_cmd_params["input_query"].startswith("/q"):
         log_session_tokens(operator_cmd_params["total_tokens"])
@@ -576,6 +618,7 @@ def run_chat_loop(conn, host, prompt_file):
         "prompt_file": prompt_file,
         "total_tokens": 0,
         "prompt": load_prompt_from_file(prompt_file),
+        "model": models(1),
     }
 
     token_count = 0
@@ -614,9 +657,8 @@ def run_chat_loop(conn, host, prompt_file):
 
             run_chat_loop_params["context_depth"] += 1
 
-            reply, token_count = query_llm_api(
-                run_chat_loop_params["user_input"]
-            )
+            reply, token_count = query_llm_api(run_chat_loop_params)
+
             if reply == {}:
                 log.error("Received an empty dict from query_llm_api().")
                 continue
@@ -643,9 +685,8 @@ def run_chat_loop(conn, host, prompt_file):
                     }
                 )
 
-                reply, token_count = query_llm_api(
-                    run_chat_loop_params["user_input"]
-                )
+                reply, token_count = query_llm_api(run_chat_loop_params)
+
                 run_chat_loop_params["total_tokens"] += token_count
 
                 if reply == {}:
@@ -657,10 +698,7 @@ def run_chat_loop(conn, host, prompt_file):
                 run_chat_loop_params["user_input"].append(
                     {"role": "assistant", "content": str(reply)}
                 )
-                buffer = StringIO()
-                console = Console(file=buffer, width=80)
-                console.print(Markdown(reply["answer"]))
-                md = buffer.getvalue()
+                md = format_answer(reply["answer"])
                 print()
                 pydoc.pager(md)
                 print()
@@ -706,8 +744,8 @@ def main():
 
     main_params = {
         "host": host,
-        "username": os.environ["TESTBED_USERNAME"],
-        "password": os.environ["TESTBED_PASSWORD"],
+        "username": os.environ["IXC_USERNAME"],
+        "password": os.environ["IXC_PASSWORD"],
     }
 
     prompt_file = "ixc_prompt.md"

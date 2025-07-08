@@ -1,4 +1,4 @@
-# Terminal IOSXE Chatbot (Trixc)
+# Terminal IOSXE Chatbot (IXC)
 
 **Terminal-based chatbot assistant for Cisco IOS-XE devices powered by OpenAI GPT-4o**
 
@@ -6,25 +6,26 @@
 
 ## Description
 
-**Terminal IOSXE Chatbot** is a terminal-driven assistant designed for network engineers to interact with Cisco IOS-XE routers and switches. It leverages the OpenAI GPT-4o API to provide intelligent responses and suggested commands, facilitating easier diagnostics, troubleshooting, and device configuration through a conversational interface.
+**Terminal IOSXE Chatbot** is a terminal-driven assistant designed for network engineers to interact with Cisco IOS-XE routers and switches. It leverages the OpenAI API to provide intelligent responses and suggested commands, facilitating easier diagnostics, troubleshooting, and device configuration through a conversational interface.
 
 The chatbot uses `Netmiko` for device interaction and integrates with OpenAI's API to process user queries and generate JSON-formatted command, answer, or configuration responses. It adheres to a strict prompt specification to ensure predictable, machine-parsable outputs.
 
 ## Features
 
 - Live CLI interaction with Cisco IOS-XE devices via SSH
-- OpenAI GPT-4o powered assistant trained to respond with JSON-formatted output
+- OpenAI powered assistant trained to respond with JSON-formatted output
 - Automatically executes commands and configuration changes based on LLM responses
 - Paged terminal output and context window management
 - Custom developer prompt specification
 - Token usage tracking
+- Support for multiple models
 
 ## Demo
 
 ```bash
 $ python trixc.py 192.0.2.1
-┌──(0)-[IOS-XE Chatbot]
-└─ R1#
+┌──(1)-(IOS-XE Chatbot)-(gpt-4.1)
+└─ r1#
 ```
 
 ## Installation
@@ -57,15 +58,15 @@ pip install -r requirements.txt
 ### 3. Export Environment Variables
 
 ```bash
-export TESTBED_USERNAME=your_username
-export TESTBED_PASSWORD=your_password
+export IXC_USERNAME=your_username
+export IXC_PASSWORD=your_password
 export OPENAI_API_KEY=your_openai_api_key
 ```
 
 ### 4. Run the Chatbot
 
 ```bash
-python trixc.py <DEVICE_IP_OR_HOSTNAME>
+python ixc.py <DEVICE_IP_OR_HOSTNAME>
 ```
 
 ## Prompt Design
@@ -98,12 +99,13 @@ During interaction, you may use the following slash commands:
 
 | Command | Description                     |
 |---------|---------------------------------|
+| `/c`    | Execute a command directly      |
+| `/m`    | Display command menu            |
 | `/n`    | Start a new context window      |
 | `/p`    | View the developer prompt       |
-| `/m`    | Display command menu            |
-| `/r`    | Reload the developer prompt     |
-| `/c`    | Execute a command directly      |
 | `/q`    | Quit and disconnect             |
+| `/r`    | Reload the developer prompt     |
+| `/s`    | Select model                    |
 
 ## Acknowledgements
 
