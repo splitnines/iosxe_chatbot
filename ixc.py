@@ -33,6 +33,14 @@ log = logger("info")
 # set the pager to be used
 os.environ["PAGER"] = "more"
 
+# Dict of available models
+MODELS = {
+    1: "o4-mini",
+    2: "gpt-4o",
+    3: "gpt-4.1-mini",
+    4: "gpt-4.1",
+}
+
 
 # allows the use of the arrow keys for navigating the command line/history
 def safe_input(prompt=""):
@@ -161,22 +169,6 @@ def format_answer(reply):
     md = buffer.getvalue()
 
     return md
-
-
-def models(model_key):
-    try:
-        model = {
-            1: "o4-mini",
-            2: "gpt-4o",
-            3: "gpt-4.1-mini",
-            4: "gpt-4.1",
-        }
-
-        return model[model_key]
-    except KeyError as e:
-        print(f"KeyError in models(): {e}")
-    except Exception as e:
-        print(f"Unhandled exception in models(): {e}")
 
 
 def get_device_info(conn):
@@ -625,13 +617,17 @@ def process_operator_commands(operator_cmd_params):
     # Select model
     elif operator_cmd_params["input_query"].startswith("/s"):
         if match := re.search(
-            r"^/s\s+([1-4])", operator_cmd_params["input_query"]
+            r"^/s\s+(\d+)", operator_cmd_params["input_query"]
         ):
             model_key = match.group(1)
-            if int(model_key) in range(1, 5):
-                operator_cmd_params["model"] = models(int(model_key))
+            if int(model_key) in MODELS.keys():
+                operator_cmd_params["model"] = MODELS[int(model_key)]
             else:
                 menu()
+                print("% Bad model selection.\n")
+        else:
+            menu()
+            print("% Bad model selection.\n")
 
     # Quit the program
     elif operator_cmd_params["input_query"].startswith("/q"):
@@ -678,7 +674,7 @@ def run_chat_loop(conn, host, prompt_file):
         "prompt_file": prompt_file,
         "total_tokens": 0,
         "prompt": load_prompt_from_file(prompt_file),
-        "model": models(1),
+        "model": MODELS[1],
     }
 
     token_count = 0
