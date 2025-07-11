@@ -37,8 +37,9 @@ os.environ["PAGER"] = "more"
 MODELS = {
     1: "o4-mini",
     2: "gpt-4o",
-    3: "gpt-4.1-mini",
-    4: "gpt-4.1",
+    3: "gpt-4o-mini",
+    4: "gpt-4.1-mini",
+    5: "gpt-4.1",
 }
 
 
@@ -304,7 +305,7 @@ def send_device_command(conn, command):
     """
     device_prompt = get_device_prompt(conn)
 
-    # lisr of strings used top clean up raw output
+    # list of strings used to clean up raw output
     conn_read_replace_strings = [
         command,
         device_prompt,
@@ -391,16 +392,6 @@ def send_config_to_device(conn, conf_list):
 def disconnect_device(conn, host):
     """
     Handles the disconnection of a connection to a host.
-
-    Parameters:
-    conn (Connection): The connection object to be disconnected.
-    host (str): The hostname or IP address of the host being disconnected from.
-
-    Returns:
-    None
-
-    Raises:
-    None
     """
     conn.disconnect()
     log.info(f"Connection to {host} closed.")
