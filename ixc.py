@@ -597,10 +597,53 @@ def process_operator_commands(operator_cmd_params):
     return operator_cmd_params
 
 
-def process_llm_commands(conn, reply):
+def process_llm_commands(conn, commands):
+    """
+    Processes a list of commands intended for a device connection, filtering
+    out forbidden commands, sending allowed commands to the device, and
+    aggregating their responses.
+
+    This function iterates over each command in the provided list, checks if
+    the command matches a set of forbidden patterns (commands starting with
+    "co" or "re", case-insensitive). If a command is forbidden, it logs an
+    error and appends a special forbidden command message to the response
+    string. Otherwise, it sends the command to the device via the
+    `send_device_command` function and appends the command's response to the
+    aggregated response string.
+
+    Parameters ---------- conn : object An active connection object to the
+    target device. The exact type depends on the device communication interface
+    and must be compatible with the `send_device_command` function. commands :
+    list of str A list of command strings to be processed and sent to the
+    device.
+
+    Returns ------- str A concatenated string containing the responses from the
+    device for each allowed command, interleaved with messages indicating any
+    forbidden commands encountered.
+
+    Raises ------ Exception Any exceptions raised by `send_device_command` are
+    propagated upwards. This function does not handle exceptions from the
+    device communication layer internally.
+
+    Notes -----
+    - The forbidden commands are identified by a regex pattern that matches any
+      command starting with "co" or "re" (case-insensitive). This pattern can
+      be adjusted as needed.
+    - Logging is performed at the error level for any forbidden commands
+      detected.
+    - The function assumes the existence of a `send_device_command(conn,
+      command)` function that sends a command to the device and returns its
+      response.
+
+    Example ------- >>> conn = create_device_connection() >>> commands =
+    ["status", "connect", "reset", "info"] >>> response =
+    process_llm_commands(conn, commands) >>> print(response) %FORBIDDEN
+    COMMAND: connect %FORBIDDEN COMMAND: reset <response for status><response
+    for info>
+    """
     forbidden = re.compile(r"^co.+|^re.+", re.IGNORECASE)
     command_resp = ""
-    for command in reply["command"]:
+    for command in commands:
         if forbidden.search(command):
             log.error(f"FORBIDDEN COMMAND from LLM {command}")
             command_resp += f"%%FORBIDDEN COMMAND: {command}"
@@ -699,7 +742,7 @@ def run_chat_loop(conn, host, prompt_file):
                 )
 
                 command_resp = process_llm_commands(
-                    run_chat_loop_params["conn"], reply
+                    run_chat_loop_params["conn"], reply["command"]
                 )
                 if "%%FORBIDDEN COMMAND" in command_resp:
                     break
