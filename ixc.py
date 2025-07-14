@@ -21,19 +21,18 @@ from socket import error as s_error
 from time import sleep
 
 # suppress the linter warning for importing without use
-# only import on non-windows
+# this allows the use of arrow keys to navigate the cli
 if platform.system() != "Windows":
     import readline
 
     _ = readline
 
-# set the logging
 log = logger("info")
 
-# set the pager to be used
 os.environ["PAGER"] = "more"
 
-# Dict of available models
+# List of models available, don't forget to update the menu() text with
+# any changes to the modle list
 MODELS = {
     1: "o4-mini",
     2: "gpt-4o",
@@ -598,6 +597,19 @@ def process_operator_commands(operator_cmd_params):
     return operator_cmd_params
 
 
+def process_llm_commands(conn, reply):
+    forbidden = re.compile(r"^co.+|^re.+", re.IGNORECASE)
+    command_resp = ""
+    for command in reply["command"]:
+        if forbidden.search(command):
+            log.error(f"FORBIDDEN COMMAND from LLM {command}")
+            command_resp += f"%%FORBIDDEN COMMAND: {command}"
+
+        command_resp += str(send_device_command(conn, command))
+
+    return command_resp
+
+
 def run_chat_loop(conn, host, prompt_file):
     """
     Initiates and manages an interactive chat loop with an IOS-XE device using
@@ -686,13 +698,11 @@ def run_chat_loop(conn, host, prompt_file):
                     {"role": "assistant", "content": str(reply)}
                 )
 
-                command_resp = ""
-                for command in reply["command"]:
-                    command_resp += str(
-                        send_device_command(
-                            run_chat_loop_params["conn"], command
-                        )
-                    )
+                command_resp = process_llm_commands(
+                    run_chat_loop_params["conn"], reply
+                )
+                if "%%FORBIDDEN COMMAND" in command_resp:
+                    break
 
                 run_chat_loop_params["user_input"].append(
                     {
