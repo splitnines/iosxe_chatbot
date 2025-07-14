@@ -647,8 +647,8 @@ def process_llm_commands(conn, commands):
         if forbidden.search(command):
             log.error(f"FORBIDDEN COMMAND from LLM {command}")
             command_resp += f"%%FORBIDDEN COMMAND: {command}"
-
-        command_resp += str(send_device_command(conn, command))
+        else:
+            command_resp += str(send_device_command(conn, command))
 
     return command_resp
 
