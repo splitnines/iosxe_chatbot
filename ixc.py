@@ -627,8 +627,8 @@ def process_llm_commands(conn, commands):
 
     Notes -----
     - The forbidden commands are identified by a regex pattern that matches any
-      command starting with "co" or "re" (case-insensitive). This pattern can
-      be adjusted as needed.
+      command starting with "co", "re" or "de" (case-insensitive). This pattern
+      can be adjusted as needed.
     - Logging is performed at the error level for any forbidden commands
       detected.
     - The function assumes the existence of a `send_device_command(conn,
@@ -641,7 +641,8 @@ def process_llm_commands(conn, commands):
     COMMAND: connect %FORBIDDEN COMMAND: reset <response for status><response
     for info>
     """
-    forbidden = re.compile(r"^co.+|^re.+", re.IGNORECASE)
+    # matching copy, configure, reload, debug and delete
+    forbidden = re.compile(r"^co.+|^re.+|^de.+", re.IGNORECASE)
     command_resp = ""
     for command in commands:
         if forbidden.search(command):
