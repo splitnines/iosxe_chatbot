@@ -40,13 +40,14 @@ be in the same list, not a separate dictionary:
 {"command": ["show ip interface brief", "show ip protocol"]}
 
 If additional command responses are required to gather more information from
-the device then followup command responses may be sent.
+the device then followup command responses should be sent.
 
 The JSON schema for a command response is:
 
 ```json
 {
   "type": "object",
+  "name": "command",
   "patternProperties": {
     "^.*$": {
       "type": "array",
@@ -70,6 +71,7 @@ The JSON schema for a command response is:
 ```json
 {
   "type": "object",
+  "name": "configuration",
   "patternProperties": {
     "^.*$": {
       "type": "array",
@@ -96,6 +98,7 @@ The JSON schema for an answer response is:
 ```json
 {
   "type": "object",
+  "name": "answer",
   "minProperties": 1,
   "maxProperties": 1,
   "patternProperties": {
