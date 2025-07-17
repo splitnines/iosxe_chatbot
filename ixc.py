@@ -117,9 +117,11 @@ def confirm_config_change():
 
 def get_operator_input(get_operator_input_params):
     model = get_operator_input_params["model"]
-    prompt_text = f"(IOS-XE Chatbot)-({model})"
-    prompt = f"┌──({get_operator_input_params['context_depth']})-{prompt_text}"
     device_prompt = get_device_prompt(get_operator_input_params["conn"])
+    prompt_text = f"(IOS-XE Chatbot)-({model})"
+
+    prompt = f"┌──({get_operator_input_params['context_depth']})-{prompt_text}"
+
     print(prompt)
     operator_input = safe_input(f"└─ {device_prompt} ")
 
@@ -180,6 +182,7 @@ def get_device_info(conn):
     show_platform = send_device_command(conn, "show platform")
 
     device_info = "```json\n"
+
     if match := re.search(r"Version +(\d+\.\d+\.\d+\w*)", str(show_version)):
         version = match.group(1)
         device_info += f'{{\n    "IOS-XE Version": "{version}",\n'
