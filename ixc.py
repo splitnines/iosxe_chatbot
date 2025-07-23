@@ -826,7 +826,14 @@ def main():
         log.error(f"File {prompt_file} does not exist.")
         sys.exit(1)
 
-    conn = connect_to_device(main_params)
+    try:
+        conn = connect_to_device(main_params)
+    except KeyboardInterrupt:
+        log.warning("KeyboardInterrupt....exiting.")
+        sys.exit(1)
+    except Exception as e:
+        log.warning(f"Unhandled exception in main(): {e}")
+        sys.exit(1)
 
     try:
         total_tokens = run_chat_loop(conn, main_params["host"], prompt_file)
