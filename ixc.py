@@ -1,4 +1,7 @@
+import argparse
 import ast
+import ctypes
+import getpass
 import os
 import platform
 import pydoc
@@ -55,30 +58,114 @@ def safe_input(prompt=""):
         return ""
 
 
-def parse_device_args():
+def parse_args():
     """
-    Parse and validate command-line arguments for the iosxe_chatbot script.
+    Parse and validate command-line arguments for connecting to a Cisco IOS-XE
+    device.
 
-    This function checks the number of command-line arguments provided to the
-    script. It expects exactly one argument, which is the device IP or name.
-    If the number of arguments is incorrect, it prints the usage message to
-    standard error and exits the program with a status code of 1.
+    This function uses argparse to handle input parameters for an AI chatbot
+    that interacts with Cisco IOS-XE devices. It enforces mutually exclusive
+    authentication methods and ensures all required credentials are provided
+    either via command-line arguments or environment variables.
 
-    Returns:
-        str: The device IP or name provided as a command-line argument.
+    Returns: dict: A dictionary containing the following keys:
+            - "host" (str): IP address or hostname of the Cisco IOS-XE device.
+            - "username" (str): Username for device authentication.
+            - "password" (str): Password for device authentication.
 
-    Raises:
-        SystemExit: If the number of command-line arguments is not equal to 2.
+    Raises: SystemExit: If argument parsing fails or required environment
+    variables are missing.
+            - If both `--env` and `--username` are provided simultaneously.
+            - If `--password` is provided without `--username`.
+            - If `--env` is specified but the environment variables
+              `IXC_USERNAME` or `IXC_PASSWORD` are not set or empty.
 
-    Usage:
-        python iosxe_chatbot.py <device IP/name>
+    Behavior:
+        - Requires the positional argument `host`.
+        - Requires exactly one of the following authentication methods: *
+          `--env`: Use environment variables `IXC_USERNAME` and `IXC_PASSWORD`.
+          * `--username` (with optional `--password`): Use provided username
+          and password. If password is omitted, prompts interactively.
+        - Validates mutual exclusivity and dependency of arguments.
+        - Prompts for password interactively if `--username` is provided
+          without `--password`.
+
+    Example usage:
+        python ixc.py 192.168.1.1 --env
+        python ixc.py device.example.com -u admin -p secret123
+        python ixc.py device.example.com -u admin
+
+    Note: This function calls `sys.exit()` internally on argument errors or
+    missing environment variables, terminating the program with an error
+    message.
     """
-    usage = "Usage: python iosxe_chatbot.py <DEVICE_IP_OR_HOSTNAME>"
-    if len(sys.argv) != 2:
-        print(usage, file=sys.stderr)
-        sys.exit(1)
+    main_params = {}
 
-    return sys.argv[1]
+    p = argparse.ArgumentParser(
+        description=(
+            "An AI chatbot for interacting with a Cisco IOS-XE devices,"
+        )
+    )
+    group = p.add_mutually_exclusive_group(required=True)
+    p.add_argument(
+        "host",
+        type=str,
+        help="IP address or hostname of the Cisco IOS-XE device to chat with.",
+    )
+    group.add_argument(
+        "-e",
+        "--env",
+        action="store_true",
+        required=False,
+        help=(
+            "Device credentials are provided through environment variables "
+            "IXC_USERNAME and IXC_PASSWORD"
+        ),
+    )
+    group.add_argument(
+        "-u",
+        "--username",
+        type=str,
+        help="Device username.",
+    )
+    p.add_argument(
+        "-p",
+        "--password",
+        type=str,
+        nargs="?",
+        const=None,
+        help="Device password.",
+    )
+
+    args = p.parse_args()
+
+    if args.username and args.env:
+        p.error("Error: cannot not use -u/--username with -e/--env")
+
+    if args.password and not args.username:
+        p.error("-p/--password can only be used with -u/--username")
+
+    main_params["host"] = args.host
+
+    if args.env:
+        main_params["username"] = os.environ["IXC_USERNAME"]
+
+        pw_str = os.environ["IXC_PASSWORD"]
+        main_params["password"] = ctypes.create_string_buffer(
+            pw_str.encode("utf-8")
+        )
+
+        if not main_params["username"] or not main_params["password"]:
+            sys.exit("Missing USERNAME and PASSWORD environment variables")
+    else:
+        main_params["username"] = args.username
+
+        pw_str = args.password or getpass.getpass("Password: ")
+        main_params["password"] = ctypes.create_string_buffer(
+            pw_str.encode("utf-8")
+        )
+
+    return main_params
 
 
 def clear_terminal():
@@ -116,9 +203,9 @@ def confirm_config_change():
 def get_operator_input(get_operator_input_params):
     model = get_operator_input_params["model"]
     device_prompt = get_device_prompt(get_operator_input_params["conn"])
-    prompt_text = f"(IOS-XE Chatbot)-({model})"
+    prompt_text = f"[IOS-XE Chatbot]-[{model}]"
 
-    prompt = f"┌──({get_operator_input_params['context_depth']})-{prompt_text}"
+    prompt = f"┌──[{get_operator_input_params['context_depth']}]-{prompt_text}"
 
     print(prompt)
     operator_input = safe_input(f"└─ {device_prompt} ")
@@ -236,10 +323,17 @@ def connect_to_device(device_params):
             host=device_params["host"],
             port=22,
             username=device_params["username"],
-            password=device_params["password"],
+            password=device_params["password"].value,
             device_type="cisco_ios",
             timeout=10,
         )
+
+        ctypes.memset(
+            ctypes.addressof(device_params["password"]),
+            0,
+            len(device_params["password"]),
+        )
+        del device_params["password"]
 
         return conn
 
@@ -810,14 +904,11 @@ def run_chat_loop(conn, host, prompt_file):
 
 
 def main():
-    host = parse_device_args()
-    clear_terminal()
+    # host = parse_device_args()
 
-    main_params = {
-        "host": host,
-        "username": os.environ["IXC_USERNAME"],
-        "password": os.environ["IXC_PASSWORD"],
-    }
+    main_params = parse_args()
+
+    clear_terminal()
 
     prompt_file = "ixc_prompt.md"
     if not os.path.exists(prompt_file):
