@@ -154,6 +154,7 @@ def parse_args():
         main_params["password"] = ctypes.create_string_buffer(
             pw_str.encode("utf-8")
         )
+        del pw_str
 
         if not main_params["username"] or not main_params["password"]:
             sys.exit("Missing USERNAME and PASSWORD environment variables")
@@ -164,6 +165,7 @@ def parse_args():
         main_params["password"] = ctypes.create_string_buffer(
             pw_str.encode("utf-8")
         )
+        del pw_str
 
     return main_params
 
@@ -227,41 +229,42 @@ def format_answer(reply):
 
 def get_device_info(conn):
     """
-    Retrieve and format device information from a network device connection.
+        Retrieve and format device information from a network device connection.
 
-    This function sends two commands, "show version" and "show platform", to
-    the device via the provided connection object. It parses the command
-    outputs to extract the IOS-XE software version and the chassis type, then
-    returns this information formatted as a JSON-like string enclosed in
-    markdown code block syntax.
+    zsh:1: command not found: gd
+        This function sends two commands, "show version" and "show platform", to
+        the device via the provided connection object. It parses the command
+        outputs to extract the IOS-XE software version and the chassis type, then
+        returns this information formatted as a JSON-like string enclosed in
+        markdown code block syntax.
 
-    Parameters ---------- conn : object An active connection object to the
-    network device. This object must be compatible with the
-    `send_device_command` function, which is expected to send commands to the
-    device and return their output as strings.
+        Parameters ---------- conn : object An active connection object to the
+        network device. This object must be compatible with the
+        `send_device_command` function, which is expected to send commands to the
+        device and return their output as strings.
 
-    Returns ------- str A string containing the extracted device information
-    formatted as a JSON object within a markdown code block. For example:
+        Returns ------- str A string containing the extracted device information
+        formatted as a JSON object within a markdown code block. For example:
 
-        ```json { "IOS-XE Version": "17.3.1", "Chassis": "C9300-24T" } ```
+            ```json { "IOS-XE Version": "17.3.1", "Chassis": "C9300-24T" } ```
 
-        If the expected information cannot be found in the command outputs, the
-        returned JSON object may be incomplete or empty.
+            If the expected information cannot be found in the command outputs, the
+            returned JSON object may be incomplete or empty.
 
-    Raises ------ Any exceptions raised by `send_device_command` or by the
-    connection object are propagated. For example, connection errors, command
-    execution failures, or timeouts may raise exceptions.
+        Raises ------ Any exceptions raised by `send_device_command` or by the
+        connection object are propagated. For example, connection errors, command
+        execution failures, or timeouts may raise exceptions.
 
-    Notes -----
-    - The function uses regular expressions to parse the command outputs.
-    - The function assumes that the `send_device_command` function and `conn`
-      are defined and implemented elsewhere in the codebase.
-    - The returned string is intended for display or logging purposes and is
-      not a Python dictionary or JSON object.
+        Notes -----
+        - The function uses regular expressions to parse the command outputs.
+        - The function assumes that the `send_device_command` function and `conn`
+          are defined and implemented elsewhere in the codebase.
+        - The returned string is intended for display or logging purposes and is
+          not a Python dictionary or JSON object.
 
-    Example ------- >>> device_info = get_device_info(conn) >>>
-    print(device_info) ```json { "IOS-XE Version": "17.3.1", "Chassis":
-    "C9300-24T" } ```
+        Example ------- >>> device_info = get_device_info(conn) >>>
+        print(device_info) ```json { "IOS-XE Version": "17.3.1", "Chassis":
+        "C9300-24T" } ```
     """
     show_version = send_device_command(conn, "show version")
     show_platform = send_device_command(conn, "show platform")
