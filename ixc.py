@@ -34,11 +34,9 @@ os.environ["PAGER"] = "more"
 # List of models available, don't forget to update the menu() text with
 # any changes to the modle list
 MODELS = {
-    1: "o4-mini",
-    2: "gpt-4o",
-    3: "gpt-4o-mini",
-    4: "gpt-4.1-mini",
-    5: "gpt-4.1",
+    1: "gpt-5-mini",
+    2: "gpt-5",
+    3: "gpt-5-nano",
 }
 
 
