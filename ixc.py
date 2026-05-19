@@ -39,6 +39,8 @@ MODELS = {
     1: "gpt-5-mini",
     2: "gpt-5",
     3: "gpt-5-nano",
+    4: "gpt-5.5",
+    5: "gpt-5.4-mini",
 }
 
 
